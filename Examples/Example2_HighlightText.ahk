@@ -5,16 +5,14 @@ WinWaitActive "ahk_exe notepad.exe"
 Send "Lorem ipsum "
 Sleep 40
 
-for word in OCR.FromWindow("A",,2).Words
-    if word.Text = "Lorem" {
-        found := word
-        break
-    }
+result := OCR.FromWindow("A",,2)
+try found := result.FindString("Lorem")
 if !IsSet(found) {
     MsgBox '"ipsum" was not found in Notepad!'
     ExitApp
 }
 
+result.Highlight(found)
+
 CoordMode "Mouse", "Window"
-loc := found.Location
-MouseClickDrag("Left", loc.x, loc.y, loc.x + loc.w, loc.y + loc.h)
+MouseClickDrag("Left", found.x, found.y, found.x + found.w, found.y + found.h)

@@ -30,6 +30,7 @@
  * 
  * Word object:
  * Text         => Recognized text of the word
+ * x,y,w,h      => Size and location of the Word. Coordinates are relative to the original image.
  * Location     => Location of the Word in format {x,y,w,h}. Coordinates are relative to the original image.
  * 
  * Additional notes:
@@ -140,6 +141,152 @@ class OCR {
         }
     }
 
+    /**
+     * Clicks an object
+     * @param Obj The object to click, which can be a OCR result object, Line, Word, or Object {x,y,w,h}
+     * If this object (the one Click is called from) contains a "Relative" property (this is
+     * added by default with OCR.FromWindow) containing a Hwnd property, then that window will be activated,
+     * otherwise the Relative properties values will be added to the x and y coordinates as offsets.
+     */
+    Click(Obj, WhichButton?, ClickCount?, DownOrUp?) {
+        if !obj.HasOwnProp("x") && InStr(Type(obj), "OCR")
+            obj := OCR.WordsBoundingRect(obj.Words)
+        x := obj.x, y := obj.y, w := obj.w, h := obj.h
+        if this.HasOwnProp("Relative") {
+            if this.Relative.HasOwnProp("Hwnd") {
+                if !WinActive(this.Relative.Hwnd) {
+                    WinActivate(this.Relative.Hwnd)
+                    WinWaitActive(this.Relative.Hwnd,,1)
+                }
+            } else
+                x += this.Relative.x, y += this.Relative.y
+        }
+        oldCoordMode := A_CoordModeMouse
+        CoordMode "Mouse", this.HasOwnProp("Relative") && this.Relative.HasOwnProp("Type") ? this.Relative.Type : "Screen"
+        Click(x+w//2, y+h//2, WhichButton?, ClickCount?, DownOrUp?)
+        CoordMode "Mouse", oldCoordMode
+    }
+
+    /**
+     * ControlClicks an object
+     * @param obj The object to click, which can be a OCR result object, Line, Word, or Object {x,y,w,h}
+     * If this object (the one Click is called from) contains a "Relative" property (this is
+     * added by default with OCR.FromWindow) containing a Hwnd property, then that window will be activated,
+     * otherwise the Relative properties values will be added to the x and y coordinates as offsets.
+     * @param WinTitle If WinTitle is set, then the coordinates stored in Obj will be converted to
+     * client coordinates and ControlClicked.
+     */
+    ControlClick(obj, WinTitle?, WinText?, WhichButton?, ClickCount?, Options?, ExcludeTitle?, ExcludeText?) {
+        if !obj.HasOwnProp("x") && InStr(Type(obj), "OCR")
+            obj := OCR.WordsBoundingRect(obj.Words)
+        x := obj.x, y := obj.y, w := obj.w, h := obj.h
+        if this.HasOwnProp("Relative") && this.Relative.HasOwnProp("Type") {
+            hWnd := this.Relative.hWnd
+            if this.Relative.Type = "Window" {
+                ; Window -> Client
+                RECT := Buffer(16, 0), pt := Buffer(8, 0)
+                DllCall("user32\GetWindowRect", "Ptr", hWnd, "Ptr", RECT)
+                winX := NumGet(RECT, 0, "Int"), winY := NumGet(RECT, 4, "Int")
+                NumPut("int", winX+x, "int", winY+y, pt)
+                DllCall("user32\ScreenToClient", "Ptr", hWnd, "Ptr", pt)
+                x := NumGet(pt,0,"int"), y := NumGet(pt,4,"int")
+            }
+        } else if IsSet(WinTitle) {
+            hWnd := WinExist(WinTitle, WinText?, ExcludeTitle?, ExcludeText?)
+            pt := Buffer(8), NumPut("int",x,pt), NumPut("int", y,pt,4)
+            DllCall("ScreenToClient", "Int", Hwnd, "Ptr", pt)
+            x := NumGet(pt,0,"int"), y := NumGet(pt,4,"int")
+        } else
+            throw TargetError("ControlClick needs to be called either after a OCR.FromWindow result or with a WinTitle argument")
+            
+        ControlClick("X" (x+w//2) " Y" (y+h//2), hWnd,, WhichButton?, ClickCount?, Options?)
+    }
+
+    /**
+     * Highlights an object on the screen with a red box
+     * @param obj The object to highlight. which can be a OCR result object, Line, Word, or Object {x,y,w,h}
+     * If this object (the one Highlight is called from) contains a "Relative" property (this is
+     * added by default with OCR.FromWindow), then its values will be added to the x and y coordinates as offsets.
+     * @param {number} showTime Default is 2 seconds.
+     * * Unset - if highlighting exists then removes the highlighting
+     * * 0 - Indefinite highlighting
+     * * Positive integer (eg 2000) - will highlight and pause for the specified amount of time in ms
+     * * Negative integer - will highlight for the specified amount of time in ms, but script execution will continue
+     * @param {string} color The color of the highlighting. Default is red.
+     * @param {number} d The border thickness of the highlighting in pixels. Default is 2.
+     * @returns {OCR}
+     */
+    Highlight(obj?, showTime:=2000, color:="Red", d:=2) {
+        static guis := []
+        if !IsSet(obj) {
+            for _, r in guis
+                r.Destroy()
+            guis := []
+            return this
+        }
+        if !guis.Length {
+            Loop 4
+                guis.Push(Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x08000000"))
+        }
+        if Type(obj) = "OCR.OCRLine" || Type(obj) = "OCR"
+            obj := OCR.WordsBoundingRect(obj.Words*)
+        x := obj.x, y := obj.y, w := obj.w, h := obj.h
+        if this.HasOwnProp("Relative")
+            x += this.Relative.x, y += this.Relative.y
+
+        Loop 4 {
+            i:=A_Index
+            , x1:=(i=2 ? x+w : x-d)
+            , y1:=(i=3 ? y+h : y-d)
+            , w1:=(i=1 or i=3 ? w+2*d : d)
+            , h1:=(i=2 or i=4 ? h+2*d : d)
+            guis[i].BackColor := color
+            guis[i].Show("NA x" . x1 . " y" . y1 . " w" . w1 . " h" . h1)
+        }
+        if showTime > 0 {
+            Sleep(showTime)
+            this.Highlight()
+        } else if showTime < 0
+            SetTimer(this.GetMethod("Highlight"), -Abs(showTime))
+        return this
+    }
+
+    /**
+     * Finds a string in the search results. Returns {x,y,w,h,Words} where Words contains an array of the matching Word objects.
+     * @param needle The string to find
+     * @param {number} i Which occurrence of needle to find
+     * @param {number} casesense Comparison case-sensitivity. Default is False/Off.
+     * @param wordCompareFunc Optionally a custom word comparison function. Accepts two arguments,
+     *     neither of which should contain spaces
+     * @returns {Object} 
+     */
+    FindString(needle, i:=1, casesense:=False, wordCompareFunc?) {
+        splitNeedle := StrSplit(RegExReplace(needle, " +", " "), " "), needleLen := splitNeedle.Length
+        if !IsSet(wordCompareFunc)
+            wordCompareFunc := casesense ? ((arg1, arg2) => arg1 == arg2) : ((arg1, arg2) => arg1 = arg2)
+        for line in this.Lines {
+            if InStr(l := line.Text, needle, casesense) {
+                counter := 0, found := []
+                for word in line.Words {
+                    t := word.Text, len := StrLen(t)
+                    if wordCompareFunc(splitNeedle[found.Length+1], t) {
+                        found.Push(word)
+                        if found.Length == needleLen {
+                            if ++counter == i {
+                                result := OCR.WordsBoundingRect(found*)
+                                result.Words := found
+                                return result
+                            } else
+                                found := []
+                        }
+                    } else
+                        found := []
+                }
+            }
+        }
+        throw TargetError('The target string "' needle '" was not found', -1)
+    }
+
     class OCRLine extends OCR.IBase {
         ; Gets the recognized text for the line.
         Text {
@@ -191,8 +338,24 @@ class OCR {
         Location {
             get {
                 ComCall(6, this, "ptr", RECT := Buffer(16, 0))   ; get_BoundingRect
-                return this.DefineProp("Location", {Value:{x:Integer(NumGet(RECT, 0, "float")), y:Integer(NumGet(RECT, 4, "float")), w:Integer(NumGet(RECT, 8, "float")), h:Integer(NumGet(RECT, 12, "float"))}}).Location
+                this.DefineProp("x", {Value:Integer(NumGet(RECT, 0, "float"))})
+                , this.DefineProp("y", {Value:Integer(NumGet(RECT, 4, "float"))})
+                , this.DefineProp("w", {Value:Integer(NumGet(RECT, 8, "float"))})
+                , this.DefineProp("h", {Value:Integer(NumGet(RECT, 12, "float"))})
+                return this.DefineProp("Location", {Value:{x:this.x, y:this.y, w:this.w, h:this.h}}).Location
             }
+        }
+        x {
+            get => this.Location.x
+        }
+        y {
+            get => this.Location.y
+        }
+        w {
+            get => this.Location.w
+        }
+        h {
+            get => this.Location.h
         }
     }
 
@@ -254,6 +417,7 @@ class OCR {
         if mode&1
             WinSetExStyle(oldStyle, hwnd)
         result := OCR(OCR.HBitmapToRandomAccessStream(hBitMap), lang?)
+        result.Relative := {X:X, Y:Y, Type:(onlyClientArea ? "Client" : "Window"), Hwnd:hWnd}
         OCR.NormalizeCoordinates(result, scale)
         return result
     }
@@ -280,8 +444,10 @@ class OCR {
      */
     static FromRect(x, y, w, h, lang?, scale:=1) {
         hBitmap := OCR.CreateBitmap(X, Y, W, H,,scale)
+        result := OCR(OCR.HBitmapToRandomAccessStream(hBitmap), lang?)
+        result.Relative := {x:x, y:y}
         ;OCR.DisplayHBitmap(hBitMap, W*scale, H*scale)
-        return OCR.NormalizeCoordinates(OCR(OCR.HBitmapToRandomAccessStream(hBitmap), lang?), scale)
+        return OCR.NormalizeCoordinates(result, scale)
     }
 
     /**
@@ -338,6 +504,48 @@ class OCR {
             Throw Error("Can not use language `"" lang "`" for OCR, please install language pack.")
         this.OcrEngine := OcrEngine, this.CurrentLanguage := lang
     }
+
+    /**
+     * Returns a bounding rectangle {x,y,w,h} for the provided Word objects
+     * @param words Word object arguments (at least 1)
+     * @returns {Object}
+     */
+    static WordsBoundingRect(words*) {
+        if !words.Length
+            throw ValueError("This function requires at least one argument")
+        X1 := 100000000, Y1 := 100000000, X2 := -100000000, Y2 := -100000000
+        for word in words {
+            X1 := Min(word.x, X1), Y1 := Min(word.y, Y1), X2 := Max(word.x+word.w, X2), Y2 := Max(word.y+word.h, Y2)
+        }
+        return {X:X1, Y:Y1, W:X2-X1, H:Y2-Y1, X2:X2, Y2:Y2}
+    }
+    
+    /**
+     * Waits text to appear on screen. If the method is successful, then Func's return value is returned.
+     * Otherwise nothing is returned.
+     * @param needle The searched text
+     * @param {number} timeout Timeout in milliseconds. Less than 0 is indefinite wait (default)
+     * @param func The function to be called for the OCR. Default is OCR.FromDesktop
+     * @param casesense Text comparison case-sensitivity
+     * @param comparefunc A custom string compare/search function, that accepts two arguments: haystack and needle.
+     *      Default is InStr. If a custom function is used, then casesense is ignored.
+     * @returns {OCR} 
+     */
+    static WaitText(needle, timeout:=-1, func?, casesense:=False, comparefunc?) {
+        endTime := A_TickCount+timeout
+        if !IsSet(func)
+            func := OCR.FromDesktop
+        if !IsSet(comparefunc)
+            comparefunc := InStr.Bind(,,casesense)
+        While timeout > 0 ? (A_TickCount < endTime) : 1 {
+            result := func()
+            if comparefunc(result.Text, needle)
+                return result
+        }
+        return
+    }
+
+    ;; Only internal methods ahead
 
     static CreateDIBSection(w, h, hdc?, bpp:=32, &ppvBits:=0) {
         hdc2 := IsSet(hdc) ? hdc : DllCall("GetDC", "Ptr", 0, "UPtr")
@@ -462,7 +670,7 @@ class OCR {
     static NormalizeCoordinates(result, scale) {
         if scale != 1 {
             for word in result.Words
-                loc := word.Location, loc.x := Integer(loc.x / scale), loc.y := Integer(loc.y / scale), loc.w := Integer(loc.w / scale), loc.h := Integer(loc.h / scale)
+                word.x := Integer(word.x / scale), word.y := Integer(word.y / scale), word.w := Integer(word.w / scale), word.h := Integer(word.h / scale)
         }
         return result
     }
