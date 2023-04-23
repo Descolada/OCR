@@ -205,7 +205,7 @@ class OCR {
      */
     static FromFile(FileName, lang?) {
         if (SubStr(FileName, 2, 1) != ":")
-            FileName := A_ScriptDir "\" file
+            FileName := A_ScriptDir "\" FileName
          if !FileExist(FileName) or InStr(FileExist(FileName), "D")
             throw TargetError("File `"" FileName "`" doesn't exist", -1)
          GUID := OCR.CLSIDFromString(OCR.IID_IRandomAccessStream)
