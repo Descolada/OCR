@@ -9,7 +9,7 @@ class OCRTestSuite {
     static __FindWord(result, needle:="Lorem") {
         for word in result.Words
             if word.Text = needle
-                return word.Location
+                return word.BoundingRect
         throw Error("Lorem not found", -1)
     }
     static __CompDiff(loc1, loc2, diff:=4) {

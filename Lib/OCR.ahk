@@ -15,23 +15,38 @@
  * Additional methods:
  * OCR.GetAvailableLanguages()
  * OCR.LoadLanguage(lang:="FirstFromAvailableLanguages")
+ * OCR.WaitText(needle, timeout:=-1, func?, casesense:=False, comparefunc?)
+ *      Calls a func (the provided OCR method) until a string is found
+ * OCR.WordsBoundingRect(words*)
+ *      Returns the bounding rectangle for multiple words
+ * 
  * 
  * OCR returns an OCR results object:
- * Text         => All recognized text
- * TextAngle    => Clockwise rotation of the recognized text 
- * Lines        => Array of all Line objects
- * Words        => Array of all Word objects
- * ImageWidth   => Used image width
- * ImageHeight  => Used image height
+ * Result.Text         => All recognized text
+ * Result.TextAngle    => Clockwise rotation of the recognized text 
+ * Result.Lines        => Array of all Line objects
+ * Result.Words        => Array of all Word objects
+ * Result.ImageWidth   => Used image width
+ * Result.ImageHeight  => Used image height
+ * 
+ * Result.FindString(needle, i:=1, casesense:=False, wordCompareFunc?)
+ *      Finds a string in the result
+ * Result.Click(Obj, WhichButton?, ClickCount?, DownOrUp?)
+ *      Clicks an object (Word, FindString result etc)
+ * Result.ControlClick(obj, WinTitle?, WinText?, WhichButton?, ClickCount?, Options?, ExcludeTitle?, ExcludeText?)
+ *      ControlClicks an object (Word, FindString result etc)
+ * Result.Highlight(obj?, showTime:=2000, color:="Red", d:=2)
+ *      Highlights an object on the screen, or removes the highlighting
+ * 
  * 
  * Line object:
- * Text         => Recognized text of the line
- * Words        => Array of Word objects for the Line
+ * Line.Text         => Recognized text of the line
+ * Line.Words        => Array of Word objects for the Line
  * 
  * Word object:
- * Text         => Recognized text of the word
- * x,y,w,h      => Size and location of the Word. Coordinates are relative to the original image.
- * Location     => Location of the Word in format {x,y,w,h}. Coordinates are relative to the original image.
+ * Line.Text         => Recognized text of the word
+ * Line.x,y,w,h      => Size and location of the Word. Coordinates are relative to the original image.
+ * Line.BoundingRect => Bounding rectangle of the Word in format {x,y,w,h}. Coordinates are relative to the original image.
  * 
  * Additional notes:
  * Languages are recognized in BCP-47 language tags. Eg. OCR.FromFile("myfile.bmp", "en-AU")
@@ -330,32 +345,32 @@ class OCR {
         }
 
         /**
-         * Gets the location of the text in {x,y,w,h} format. 
-         * The location coordinate system will be dependant on the image capture method.
+         * Gets the bounding rectangle of the text in {x,y,w,h} format. 
+         * The bounding rectangles coordinate system will be dependant on the image capture method.
          * For example, if the image was captured as a rectangle from the screen, then the coordinates
          * will be relative to the left top corner of the rectangle.
          */
-        Location {
+        BoundingRect {
             get {
                 ComCall(6, this, "ptr", RECT := Buffer(16, 0))   ; get_BoundingRect
                 this.DefineProp("x", {Value:Integer(NumGet(RECT, 0, "float"))})
                 , this.DefineProp("y", {Value:Integer(NumGet(RECT, 4, "float"))})
                 , this.DefineProp("w", {Value:Integer(NumGet(RECT, 8, "float"))})
                 , this.DefineProp("h", {Value:Integer(NumGet(RECT, 12, "float"))})
-                return this.DefineProp("Location", {Value:{x:this.x, y:this.y, w:this.w, h:this.h}}).Location
+                return this.DefineProp("BoundingRect", {Value:{x:this.x, y:this.y, w:this.w, h:this.h}}).BoundingRect
             }
         }
         x {
-            get => this.Location.x
+            get => this.BoundingRect.x
         }
         y {
-            get => this.Location.y
+            get => this.BoundingRect.y
         }
         w {
-            get => this.Location.w
+            get => this.BoundingRect.w
         }
         h {
-            get => this.Location.h
+            get => this.BoundingRect.h
         }
     }
 
@@ -670,7 +685,7 @@ class OCR {
     static NormalizeCoordinates(result, scale) {
         if scale != 1 {
             for word in result.Words
-                word.x := Integer(word.x / scale), word.y := Integer(word.y / scale), word.w := Integer(word.w / scale), word.h := Integer(word.h / scale)
+                word.x := Integer(word.x / scale), word.y := Integer(word.y / scale), word.w := Integer(word.w / scale), word.h := Integer(word.h / scale), word.BoundingRect := {X:word.x, Y:word.y, W:word.w, H:word.h}
         }
         return result
     }
