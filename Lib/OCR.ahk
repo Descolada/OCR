@@ -20,6 +20,9 @@
  * OCR.WordsBoundingRect(words*)
  *      Returns the bounding rectangle for multiple words
  * 
+ * Properties:
+ * OCR.MaxImageDimension
+ * MinImageDimension is not documented, but appears to be 40 pixels (source: user FanaticGuru in AutoHotkey forums)
  * 
  * OCR returns an OCR results object:
  * Result.Text         => All recognized text
@@ -71,6 +74,7 @@ class OCR {
 
     static __New() {
         this.LanguageFactory := OCR.CreateClass("Windows.Globalization.Language", ILanguageFactory := "{9B0252AC-0C27-44F8-B792-9793FB66C63E}")
+        this.BitmapEncoderStatics := OCR.CreateClass("Windows.Graphics.Imaging.BitmapEncoder", IBitmapEncoderStatics := "{A74356A7-A4E4-4EB9-8E40-564DE7E1CCB2}")
         this.BitmapDecoderStatics := OCR.CreateClass("Windows.Graphics.Imaging.BitmapDecoder", IBitmapDecoderStatics := "{438CCB26-BCEF-4E95-BAD6-23A822E58D01}")
         this.OcrEngineStatics := OCR.CreateClass("Windows.Media.Ocr.OcrEngine", IOcrEngineStatics := "{5BFFA85A-3384-3540-9940-699120D428A8}")
         ComCall(6, this.OcrEngineStatics, "uint*", &MaxImageDimension:=0)   ; MaxImageDimension
@@ -94,20 +98,50 @@ class OCR {
         ComCall(12, BitmapFrame, "uint*", &width:=0)   ; get_PixelWidth
         ComCall(13, BitmapFrame, "uint*", &height:=0)   ; get_PixelHeight
         if (width > OCR.MaxImageDimension) or (height > OCR.MaxImageDimension)
-           throw ValueError("Image is to big - " width "x" height ".`nIt should be maximum - " OCR.MaxImageDimension " pixels")
-        this.ImageWidth := width, this.ImageHeight := height
+           throw ValueError("Image is too big - " width "x" height ".`nIt should be maximum - " OCR.MaxImageDimension " pixels")
 
         BitmapFrameWithSoftwareBitmap := ComObjQuery(BitmapDecoder, IBitmapFrameWithSoftwareBitmap := "{FE287C9A-420C-4963-87AD-691436E08383}")
         ComCall(6, BitmapFrameWithSoftwareBitmap, "ptr*", SoftwareBitmap:=OCR.IBase())   ; GetSoftwareBitmapAsync
         OCR.WaitForAsync(&SoftwareBitmap)
+
+        if (width < 40 || height < 40) {
+            ; The following will scale the RandomAccessStream to at least width and height 40 pixels.
+            ; This is rather slow, so it's better to avoid using such small images.
+            ; Wasn't able to figure out how to simply enlarge the image without scaling...
+            InMemoryRandomAccessStream := OCR.CreateClass("Windows.Storage.Streams.InMemoryRandomAccessStream")
+            BmpEncoderId := Buffer(16)
+            ComCall(6, OCR.BitmapEncoderStatics, "ptr", BmpEncoderId) ; get_BmpEncoderId
+            ComCall(13, OCR.BitmapEncoderStatics, "ptr", BmpEncoderId, "ptr", InMemoryRandomAccessStream, "ptr*", BitmapEncoder:=OCR.IBase())   ; CreateAsync
+            OCR.WaitForAsync(&BitmapEncoder)
+            BitmapEncoderWithSoftwareBitmap := ComObjQuery(BitmapEncoder, IBitmapEncoderWithSoftwareBitmap := "{686CD241-4330-4C77-ACE4-0334968B1768}")
+            ComCall(6, BitmapEncoderWithSoftwareBitmap, "ptr", SoftwareBitmap, "uint")
+
+            ComCall(15, BitmapEncoder, "ptr*", BitmapTransform:=OCR.IBase()) ; BitmapTransform
+            scale := 40.0 / Min(width, height)
+            this.ImageWidth := Ceil(width*scale), this.ImageHeight := Ceil(height*scale)
+            ComCall(7, BitmapTransform, "int", this.ImageWidth) ; put_ScaledWidth
+            ComCall(9, BitmapTransform, "int", this.ImageHeight) ; put_ScaledHeight
+
+            ComCall(19, BitmapEncoder, "ptr*", AsyncResult:=OCR.IBase()) ; FlushAsync
+            OCR.WaitForAsync(&AsyncResult)
+            ComCall(14, OCR.BitmapDecoderStatics, "ptr", InMemoryRandomAccessStream, "ptr*", BitmapDecoder2:=OCR.IBase())   ; CreateAsync
+            OCR.WaitForAsync(&BitmapDecoder2)
+            BitmapFrameWithSoftwareBitmap := ComObjQuery(BitmapDecoder2, IBitmapFrameWithSoftwareBitmap := "{FE287C9A-420C-4963-87AD-691436E08383}")
+            ComCall(6, BitmapFrameWithSoftwareBitmap, "ptr*", SoftwareBitmap2:=OCR.IBase())   ; GetSoftwareBitmapAsync
+            OCR.WaitForAsync(&SoftwareBitmap2)
+
+            OCR.CloseIClosable(SoftwareBitmap)
+            OCR.CloseIClosable(InMemoryRandomAccessStream)
+            SoftwareBitmap := SoftwareBitmap2
+        } else 
+            this.ImageWidth := width, this.ImageHeight := height
+
         ComCall(6, OCR.OcrEngine, "ptr", SoftwareBitmap, "ptr*", OcrResult:=OCR.IBase())   ; RecognizeAsync
         OCR.WaitForAsync(&OcrResult)
 
         ; Cleanup
-        Close := ComObjQuery(pIRandomAccessStream, IClosable := "{30D5A829-7FA4-4026-83BB-D75BAE4EA99E}")
-        ComCall(6, Close)   ; Close
-        Close := ComObjQuery(SoftwareBitmap, IClosable := "{30D5A829-7FA4-4026-83BB-D75BAE4EA99E}")
-        ComCall(6, Close)   ; Close
+        OCR.CloseIClosable(pIRandomAccessStream)
+        OCR.CloseIClosable(SoftwareBitmap)
 
         this.ptr := OcrResult.ptr, ObjAddRef(OcrResult.ptr)
     }
@@ -450,8 +484,8 @@ class OCR {
      * to the top left corner of the rectangle.
      * @param x Screen x coordinate
      * @param y Screen y coordinate
-     * @param w Region width
-     * @param h Region height
+     * @param w Region width. Maximum is OCR.MaxImageDimension; minimum is 40 pixels (source: user FanaticGuru in AutoHotkey forums), smaller images will be scaled to at least 40 pixels.
+     * @param h Region height. Maximum is OCR.MaxImageDimension; minimum is 40 pixels, smaller images will be scaled accordingly.
      * @param lang OCR language. Default is first from available languages.
      * @param scale The scaling factor to use. Larger number (eg 2) might improve the accuracy
      *     of the OCR, at the cost of speed.
@@ -461,7 +495,6 @@ class OCR {
         hBitmap := OCR.CreateBitmap(X, Y, W, H,,scale)
         result := OCR(OCR.HBitmapToRandomAccessStream(hBitmap), lang?)
         result.Relative := {x:x, y:y}
-        ;OCR.DisplayHBitmap(hBitMap, W*scale, H*scale)
         return OCR.NormalizeCoordinates(result, scale)
     }
 
@@ -603,9 +636,11 @@ class OCR {
         } else {
             HDC := DllCall("GetDC", "Ptr", 0, "UPtr")
         }
-        HBM := DllCall("CreateCompatibleBitmap", "Ptr", HDC, "Int", sW, "Int", sH, "UPtr")
+        HBM := DllCall("CreateCompatibleBitmap", "Ptr", HDC, "Int", Max(40,sW), "Int", Max(40,sH), "UPtr")
         PDC := DllCall("CreateCompatibleDC", "Ptr", HDC, "UPtr")
         DllCall("SelectObject", "Ptr", PDC, "Ptr", HBM)
+        if sW < 40 || sH < 40 ; Fills the bitmap so it's at least 40x40, which seems to improve recognition
+            DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", Max(40,sW), "Int", Max(40,sH), "Ptr", HDC, "Int", X, "Int", Y, "Int", 1, "Int", 1, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY. 
         DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", sW, "Int", sH, "Ptr", HDC, "Int", X, "Int", Y, "Int", W, "Int", H, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY
         DllCall("DeleteDC", "Ptr", PDC)
         DllCall("ReleaseDC", "Ptr", 0, "Ptr", HDC)
@@ -638,10 +673,14 @@ class OCR {
         WinWaitClose gImage
     }
 
-    static CreateClass(str, interface) {
+    static CreateClass(str, interface?) {
         hString := OCR.CreateHString(str)
-        GUID := OCR.CLSIDFromString(interface)
-        result := DllCall("Combase.dll\RoGetActivationFactory", "ptr", hString, "ptr", GUID, "ptr*", &cls:=0, "uint")
+        if !IsSet(interface) {
+            result := DllCall("Combase.dll\RoActivateInstance", "ptr", hString, "ptr*", cls:=OCR.IBase(), "uint")
+        } else {
+            GUID := OCR.CLSIDFromString(interface)
+            result := DllCall("Combase.dll\RoGetActivationFactory", "ptr", hString, "ptr", GUID, "ptr*", cls:=OCR.IBase(), "uint")
+        }
         if (result != 0) {
             if (result = 0x80004002)
                 throw Error("No such interface supported", -1, interface)
@@ -673,6 +712,14 @@ class OCR {
         }
         ComCall(8, obj, "ptr*", ObjectResult:=OCR.IBase())   ; GetResults
         obj := ObjectResult
+    }
+
+    static CloseIClosable(pClosable) {
+        static IClosable := "{30D5A829-7FA4-4026-83BB-D75BAE4EA99E}"
+        Close := ComObjQuery(pClosable, IClosable)
+        ComCall(6, Close)   ; Close
+        if !IsObject(pClosable)
+            ObjRelease(pClosable)
     }
 
     static CLSIDFromString(IID) {
