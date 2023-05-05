@@ -614,11 +614,11 @@ class OCR {
         } else {
             HDC := DllCall("GetDC", "Ptr", 0, "UPtr")
         }
-        HBM := DllCall("CreateCompatibleBitmap", "Ptr", HDC, "Int", sW, "Int", sH, "UPtr")
+        HBM := DllCall("CreateCompatibleBitmap", "Ptr", HDC, "Int", Max(40,sW), "Int", Max(40,sH), "UPtr")
         PDC := DllCall("CreateCompatibleDC", "Ptr", HDC, "UPtr")
         DllCall("SelectObject", "Ptr", PDC, "Ptr", HBM)
-        ;if sW < 40 || sH < 40 ; Fills the bitmap so it's at least 40x40, which seems to improve recognition
-        ;    DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", Max(40,sW), "Int", Max(40,sH), "Ptr", HDC, "Int", X, "Int", Y, "Int", 1, "Int", 1, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY. 
+        if sW < 40 || sH < 40 ; Fills the bitmap so it's at least 40x40, which seems to improve recognition
+            DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", Max(40,sW), "Int", Max(40,sH), "Ptr", HDC, "Int", X, "Int", Y, "Int", 1, "Int", 1, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY. 
         DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", sW, "Int", sH, "Ptr", HDC, "Int", X, "Int", Y, "Int", W, "Int", H, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY
         DllCall("DeleteDC", "Ptr", PDC)
         DllCall("ReleaseDC", "Ptr", 0, "Ptr", HDC)
