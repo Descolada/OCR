@@ -91,7 +91,6 @@ class OCR {
     __New(pIRandomAccessStream?, lang := "FirstFromAvailableLanguages") {
         if IsSet(lang) || !OCR.HasOwnProp("CurrentLanguage")
             OCR.LoadLanguage(lang?)
-
         ComCall(14, OCR.BitmapDecoderStatics, "ptr", pIRandomAccessStream, "ptr*", BitmapDecoder:=OCR.IBase())   ; CreateAsync
         OCR.WaitForAsync(&BitmapDecoder)
         BitmapFrame := ComObjQuery(BitmapDecoder, IBitmapFrame := "{72A49A1C-8081-438D-91BC-94ECFC8185C6}")
@@ -101,40 +100,19 @@ class OCR {
            throw ValueError("Image is too big - " width "x" height ".`nIt should be maximum - " OCR.MaxImageDimension " pixels")
 
         BitmapFrameWithSoftwareBitmap := ComObjQuery(BitmapDecoder, IBitmapFrameWithSoftwareBitmap := "{FE287C9A-420C-4963-87AD-691436E08383}")
-        ComCall(6, BitmapFrameWithSoftwareBitmap, "ptr*", SoftwareBitmap:=OCR.IBase())   ; GetSoftwareBitmapAsync
-        OCR.WaitForAsync(&SoftwareBitmap)
-
-        if (width < 40 || height < 40) {
-            ; The following will scale the RandomAccessStream to at least width and height 40 pixels.
-            ; This is rather slow, so it's better to avoid using such small images.
-            ; Wasn't able to figure out how to simply enlarge the image without scaling...
-            InMemoryRandomAccessStream := OCR.CreateClass("Windows.Storage.Streams.InMemoryRandomAccessStream")
-            BmpEncoderId := Buffer(16)
-            ComCall(6, OCR.BitmapEncoderStatics, "ptr", BmpEncoderId) ; get_BmpEncoderId
-            ComCall(13, OCR.BitmapEncoderStatics, "ptr", BmpEncoderId, "ptr", InMemoryRandomAccessStream, "ptr*", BitmapEncoder:=OCR.IBase())   ; CreateAsync
-            OCR.WaitForAsync(&BitmapEncoder)
-            BitmapEncoderWithSoftwareBitmap := ComObjQuery(BitmapEncoder, IBitmapEncoderWithSoftwareBitmap := "{686CD241-4330-4C77-ACE4-0334968B1768}")
-            ComCall(6, BitmapEncoderWithSoftwareBitmap, "ptr", SoftwareBitmap, "uint")
-
-            ComCall(15, BitmapEncoder, "ptr*", BitmapTransform:=OCR.IBase()) ; BitmapTransform
-            scale := 40.0 / Min(width, height)
-            this.ImageWidth := Ceil(width*scale), this.ImageHeight := Ceil(height*scale)
+        if width < 40 || height < 40 {
+            BitmapTransform := OCR.CreateClass("Windows.Graphics.Imaging.BitmapTransform")
+            scale := 40.0 / Min(width, height), this.ImageWidth := Ceil(width*scale), this.ImageHeight := Ceil(height*scale)
             ComCall(7, BitmapTransform, "int", this.ImageWidth) ; put_ScaledWidth
             ComCall(9, BitmapTransform, "int", this.ImageHeight) ; put_ScaledHeight
-
-            ComCall(19, BitmapEncoder, "ptr*", AsyncResult:=OCR.IBase()) ; FlushAsync
-            OCR.WaitForAsync(&AsyncResult)
-            ComCall(14, OCR.BitmapDecoderStatics, "ptr", InMemoryRandomAccessStream, "ptr*", BitmapDecoder2:=OCR.IBase())   ; CreateAsync
-            OCR.WaitForAsync(&BitmapDecoder2)
-            BitmapFrameWithSoftwareBitmap := ComObjQuery(BitmapDecoder2, IBitmapFrameWithSoftwareBitmap := "{FE287C9A-420C-4963-87AD-691436E08383}")
-            ComCall(6, BitmapFrameWithSoftwareBitmap, "ptr*", SoftwareBitmap2:=OCR.IBase())   ; GetSoftwareBitmapAsync
-            OCR.WaitForAsync(&SoftwareBitmap2)
-
-            OCR.CloseIClosable(SoftwareBitmap)
-            OCR.CloseIClosable(InMemoryRandomAccessStream)
-            SoftwareBitmap := SoftwareBitmap2
-        } else 
+            ComCall(8, BitmapFrame, "uint*", &BitmapPixelFormat:=0) ; get_BitmapPixelFormat
+            ComCall(9, BitmapFrame, "uint*", &BitmapAlphaMode:=0) ; get_BitmapAlphaMode
+            ComCall(8, BitmapFrameWithSoftwareBitmap, "uint", BitmapPixelFormat, "uint", BitmapAlphaMode, "ptr", BitmapTransform, "uint", IgnoreExifOrientation := 0, "uint", DoNotColorManage := 0, "ptr*", SoftwareBitmap:=OCR.IBase()) ; GetSoftwareBitmapAsync
+        } else {
             this.ImageWidth := width, this.ImageHeight := height
+            ComCall(6, BitmapFrameWithSoftwareBitmap, "ptr*", SoftwareBitmap:=OCR.IBase())   ; GetSoftwareBitmapAsync
+        }
+        OCR.WaitForAsync(&SoftwareBitmap)
 
         ComCall(6, OCR.OcrEngine, "ptr", SoftwareBitmap, "ptr*", OcrResult:=OCR.IBase())   ; RecognizeAsync
         OCR.WaitForAsync(&OcrResult)
@@ -636,11 +614,11 @@ class OCR {
         } else {
             HDC := DllCall("GetDC", "Ptr", 0, "UPtr")
         }
-        HBM := DllCall("CreateCompatibleBitmap", "Ptr", HDC, "Int", Max(40,sW), "Int", Max(40,sH), "UPtr")
+        HBM := DllCall("CreateCompatibleBitmap", "Ptr", HDC, "Int", sW, "Int", sH, "UPtr")
         PDC := DllCall("CreateCompatibleDC", "Ptr", HDC, "UPtr")
         DllCall("SelectObject", "Ptr", PDC, "Ptr", HBM)
-        if sW < 40 || sH < 40 ; Fills the bitmap so it's at least 40x40, which seems to improve recognition
-            DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", Max(40,sW), "Int", Max(40,sH), "Ptr", HDC, "Int", X, "Int", Y, "Int", 1, "Int", 1, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY. 
+        ;if sW < 40 || sH < 40 ; Fills the bitmap so it's at least 40x40, which seems to improve recognition
+        ;    DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", Max(40,sW), "Int", Max(40,sH), "Ptr", HDC, "Int", X, "Int", Y, "Int", 1, "Int", 1, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY. 
         DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", sW, "Int", sH, "Ptr", HDC, "Int", X, "Int", Y, "Int", W, "Int", H, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY
         DllCall("DeleteDC", "Ptr", PDC)
         DllCall("ReleaseDC", "Ptr", 0, "Ptr", HDC)
