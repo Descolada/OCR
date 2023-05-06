@@ -74,7 +74,7 @@ class OCR {
 
     static __New() {
         this.LanguageFactory := OCR.CreateClass("Windows.Globalization.Language", ILanguageFactory := "{9B0252AC-0C27-44F8-B792-9793FB66C63E}")
-        this.BitmapEncoderStatics := OCR.CreateClass("Windows.Graphics.Imaging.BitmapEncoder", IBitmapEncoderStatics := "{A74356A7-A4E4-4EB9-8E40-564DE7E1CCB2}")
+        this.BitmapTransform := OCR.CreateClass("Windows.Graphics.Imaging.BitmapTransform")
         this.BitmapDecoderStatics := OCR.CreateClass("Windows.Graphics.Imaging.BitmapDecoder", IBitmapDecoderStatics := "{438CCB26-BCEF-4E95-BAD6-23A822E58D01}")
         this.OcrEngineStatics := OCR.CreateClass("Windows.Media.Ocr.OcrEngine", IOcrEngineStatics := "{5BFFA85A-3384-3540-9940-699120D428A8}")
         ComCall(6, this.OcrEngineStatics, "uint*", &MaxImageDimension:=0)   ; MaxImageDimension
@@ -101,13 +101,12 @@ class OCR {
 
         BitmapFrameWithSoftwareBitmap := ComObjQuery(BitmapDecoder, IBitmapFrameWithSoftwareBitmap := "{FE287C9A-420C-4963-87AD-691436E08383}")
         if width < 40 || height < 40 {
-            BitmapTransform := OCR.CreateClass("Windows.Graphics.Imaging.BitmapTransform")
             scale := 40.0 / Min(width, height), this.ImageWidth := Ceil(width*scale), this.ImageHeight := Ceil(height*scale)
-            ComCall(7, BitmapTransform, "int", this.ImageWidth) ; put_ScaledWidth
-            ComCall(9, BitmapTransform, "int", this.ImageHeight) ; put_ScaledHeight
+            ComCall(7, this.BitmapTransform, "int", this.ImageWidth) ; put_ScaledWidth
+            ComCall(9, this.BitmapTransform, "int", this.ImageHeight) ; put_ScaledHeight
             ComCall(8, BitmapFrame, "uint*", &BitmapPixelFormat:=0) ; get_BitmapPixelFormat
             ComCall(9, BitmapFrame, "uint*", &BitmapAlphaMode:=0) ; get_BitmapAlphaMode
-            ComCall(8, BitmapFrameWithSoftwareBitmap, "uint", BitmapPixelFormat, "uint", BitmapAlphaMode, "ptr", BitmapTransform, "uint", IgnoreExifOrientation := 0, "uint", DoNotColorManage := 0, "ptr*", SoftwareBitmap:=OCR.IBase()) ; GetSoftwareBitmapAsync
+            ComCall(8, BitmapFrameWithSoftwareBitmap, "uint", BitmapPixelFormat, "uint", BitmapAlphaMode, "ptr", this.BitmapTransform, "uint", IgnoreExifOrientation := 0, "uint", DoNotColorManage := 0, "ptr*", SoftwareBitmap:=OCR.IBase()) ; GetSoftwareBitmapAsync
         } else {
             this.ImageWidth := width, this.ImageHeight := height
             ComCall(6, BitmapFrameWithSoftwareBitmap, "ptr*", SoftwareBitmap:=OCR.IBase())   ; GetSoftwareBitmapAsync
