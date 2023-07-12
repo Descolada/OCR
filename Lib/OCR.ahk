@@ -32,14 +32,16 @@
  * Result.ImageWidth   => Used image width
  * Result.ImageHeight  => Used image height
  * 
- * Result.FindString(needle, i:=1, casesense:=False, wordCompareFunc?)
+ * Result.FindString(needle, i:=1, casesense:=False, wordCompareFunc?, searchArea?)
  *      Finds a string in the result
  * Result.Click(Obj, WhichButton?, ClickCount?, DownOrUp?)
  *      Clicks an object (Word, FindString result etc)
  * Result.ControlClick(obj, WinTitle?, WinText?, WhichButton?, ClickCount?, Options?, ExcludeTitle?, ExcludeText?)
  *      ControlClicks an object (Word, FindString result etc)
  * Result.Highlight(obj?, showTime:=2000, color:="Red", d:=2)
- *      Highlights an object on the screen, or removes the highlighting
+ *      Highlights a Word, Line, or object with {x,y,w,h} properties on the screen, or removes the highlighting
+ * Result.Crop(x1, y1, x2, y2)
+ *      Crops the result object to contain only results from an area defined by points (x1,y1) and (x2,y2).
  * 
  * 
  * Line object:
@@ -47,9 +49,9 @@
  * Line.Words        => Array of Word objects for the Line
  * 
  * Word object:
- * Line.Text         => Recognized text of the word
- * Line.x,y,w,h      => Size and location of the Word. Coordinates are relative to the original image.
- * Line.BoundingRect => Bounding rectangle of the Word in format {x,y,w,h}. Coordinates are relative to the original image.
+ * Word.Text         => Recognized text of the word
+ * Word.x,y,w,h      => Size and location of the Word. Coordinates are relative to the original image.
+ * Word.BoundingRect => Bounding rectangle of the Word in format {x,y,w,h}. Coordinates are relative to the original image.
  * 
  * Additional notes:
  * Languages are recognized in BCP-47 language tags. Eg. OCR.FromFile("myfile.bmp", "en-AU")
@@ -283,17 +285,26 @@ class OCR {
      * @param {number} i Which occurrence of needle to find
      * @param {number} casesense Comparison case-sensitivity. Default is False/Off.
      * @param wordCompareFunc Optionally a custom word comparison function. Accepts two arguments,
-     *     neither of which should contain spaces
+     *     neither of which should contain spaces. 
+     * @param searchArea Optionally a {x1,y1,x2,y2} object defining the search area inside the result object
      * @returns {Object} 
      */
-    FindString(needle, i:=1, casesense:=False, wordCompareFunc?) {
+    FindString(needle, i:=1, casesense:=False, wordCompareFunc?, searchArea?) {
         splitNeedle := StrSplit(RegExReplace(needle, " +", " "), " "), needleLen := splitNeedle.Length
         if !IsSet(wordCompareFunc)
             wordCompareFunc := casesense ? ((arg1, arg2) => arg1 == arg2) : ((arg1, arg2) => arg1 = arg2)
+        If IsSet(searchArea) {
+            x1 := searchArea.HasOwnProp("x1") ? searchArea.x1 : -100000
+            y1 := searchArea.HasOwnProp("y1") ? searchArea.y1 : -100000
+            x2 := searchArea.HasOwnProp("x2") ? searchArea.x2 : 100000
+            y2 := searchArea.HasOwnProp("y2") ? searchArea.y2 : 100000
+        }
         for line in this.Lines {
             if InStr(l := line.Text, needle, casesense) {
                 counter := 0, found := []
                 for word in line.Words {
+                    If IsSet(searchArea) && (word.x < x1 || word.y < y1 || word.x+word.w > x2 || word.y+word.h > y2)
+                        continue
                     t := word.Text, len := StrLen(t)
                     if wordCompareFunc(splitNeedle[found.Length+1], t) {
                         found.Push(word)
@@ -311,6 +322,37 @@ class OCR {
             }
         }
         throw TargetError('The target string "' needle '" was not found', -1)
+    }
+
+    /**
+     * Crops the result object to contain only results from an area defined by points (x1,y1) and (x2,y2).
+     * Note that these coordinates are relative to the result object, not to the screen.
+     * @param {Integer} x1 x coordinate of the top left corner of the search area
+     * @param {Integer} y1 y coordinate of the top left corner of the search area
+     * @param {Integer} x2 x coordinate of the bottom right corner of the search area
+     * @param {Integer} y2 y coordinate of the bottom right corner of the search area
+     * @returns {OCR}
+     */
+    Crop(x1:=-100000, y1:=-100000, x2:=100000, y2:=100000) {
+        result := this.Clone()
+        croppedLines := [], croppedText := ""
+        for line in result.Lines {
+            croppedWords := [], lineText := ""
+            for word in line.Words {
+                if word.x >= x1 && word.y >= y1 && (word.x+word.w) <= x2 && (word.y+word.h) <= y2
+                    croppedWords.Push(word), lineText .= word.Text " ", ObjAddRef(word.ptr)
+            }
+            if croppedWords.Length {
+                line := {Text:Trim(lineText), Words:croppedWords}
+                line.base.__Class := "OCR.OCRLine"
+                croppedLines.Push(line)
+                croppedText .= lineText
+            }
+        }
+        result.DefineProp("Lines", {Value:croppedLines})
+        result.DefineProp("Text", {Value:Trim(croppedText)})
+        result.DefineProp("Words", OCR.Prototype.GetOwnPropDesc("Words"))
+        return result
     }
 
     class OCRLine extends OCR.IBase {
