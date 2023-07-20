@@ -34,6 +34,8 @@
  * 
  * Result.FindString(needle, i:=1, casesense:=False, wordCompareFunc?, searchArea?)
  *      Finds a string in the result
+ * Result.FindStrings(needle, casesense:=False, wordCompareFunc?, searchArea?)
+ *      Finds all strings in the result
  * Result.Click(Obj, WhichButton?, ClickCount?, DownOrUp?)
  *      Clicks an object (Word, FindString result etc)
  * Result.ControlClick(obj, WinTitle?, WinText?, WhichButton?, ClickCount?, Options?, ExcludeTitle?, ExcludeText?)
@@ -286,6 +288,8 @@ class OCR {
      * @param {number} casesense Comparison case-sensitivity. Default is False/Off.
      * @param wordCompareFunc Optionally a custom word comparison function. Accepts two arguments,
      *     neither of which should contain spaces. 
+     *     When using RegExMatch as wordCompareFunc note that a "space" will split the RegEx into multiple parts.
+     *     Eg. "\w+   \d+" will actually match for a word satisfying "\w+" followed by a word satisfying "\d+"
      * @param searchArea Optionally a {x1,y1,x2,y2} object defining the search area inside the result object
      * @returns {Object} 
      */
@@ -300,7 +304,7 @@ class OCR {
             y2 := searchArea.HasOwnProp("y2") ? searchArea.y2 : 100000
         }
         for line in this.Lines {
-            if InStr(l := line.Text, needle, casesense) {
+            if IsSet(wordCompareFunc) || InStr(l := line.Text, needle, casesense) {
                 counter := 0, found := []
                 for word in line.Words {
                     If IsSet(searchArea) && (word.x < x1 || word.y < y1 || word.x+word.w > x2 || word.y+word.h > y2)
@@ -322,6 +326,52 @@ class OCR {
             }
         }
         throw TargetError('The target string "' needle '" was not found', -1)
+    }
+
+    /**
+     * Finds all strings matching the needle in the search results. Returns an array of {x,y,w,h,Words} objects
+     * where Words contains an array of the matching Word objects.
+     * @param needle The string to find. 
+     * @param {number} casesense Comparison case-sensitivity. Default is False/Off.
+     * @param wordCompareFunc Optionally a custom word comparison function. Accepts two arguments,
+     *     neither of which should contain spaces. 
+     *     When using RegExMatch as wordCompareFunc note that a "space" will split the RegEx into multiple parts.
+     *     Eg. "\w+   \d+" will actually match for a word satisfying "\w+" followed by a word satisfying "\d+"
+     * @param searchArea Optionally a {x1,y1,x2,y2} object defining the search area inside the result object
+     * @returns {Array} 
+     */
+    FindStrings(needle, casesense:=False, wordCompareFunc?, searchArea?) {
+        splitNeedle := StrSplit(RegExReplace(needle, " +", " "), " "), needleLen := splitNeedle.Length
+        if !IsSet(wordCompareFunc)
+            wordCompareFunc := casesense ? ((arg1, arg2) => arg1 == arg2) : ((arg1, arg2) => arg1 = arg2)
+        If IsSet(searchArea) {
+            x1 := searchArea.HasOwnProp("x1") ? searchArea.x1 : -100000
+            y1 := searchArea.HasOwnProp("y1") ? searchArea.y1 : -100000
+            x2 := searchArea.HasOwnProp("x2") ? searchArea.x2 : 100000
+            y2 := searchArea.HasOwnProp("y2") ? searchArea.y2 : 100000
+        }
+        results := []
+        for line in this.Lines {
+            if IsSet(wordCompareFunc) || InStr(l := line.Text, needle, casesense) {
+                counter := 0, found := []
+                for word in line.Words {
+                    If IsSet(searchArea) && (word.x < x1 || word.y < y1 || word.x+word.w > x2 || word.y+word.h > y2)
+                        continue
+                    t := word.Text, len := StrLen(t)
+                    if wordCompareFunc(t, splitNeedle[found.Length+1]) {
+                        found.Push(word)
+                        if found.Length == needleLen {
+                            result := OCR.WordsBoundingRect(found*)
+                            result.Words := found
+                            results.Push(result)
+                            counter := 0, found := [], result := unset
+                        }
+                    } else
+                        found := []
+                }
+            }
+        }
+        return results
     }
 
     /**
