@@ -77,11 +77,11 @@ class OCR {
     }
 
     static __New() {
-        this.prototype.__Static := this
+        this.prototype.__OCR := this
         this.OCRLine.base := this.IBase ; OCRLine extends OCR.IBase
-        this.OCRLine.prototype.__StaticSuper := this
+        this.OCRLine.prototype.__OCR := this
         this.OCRWord.base := this.IBase ; OCRWord extends OCR.IBase
-        this.OCRWord.prototype.__StaticSuper := this
+        this.OCRWord.prototype.__OCR := this
         this.LanguageFactory := this.CreateClass("Windows.Globalization.Language", ILanguageFactory := "{9B0252AC-0C27-44F8-B792-9793FB66C63E}")
         this.BitmapTransform := this.CreateClass("Windows.Graphics.Imaging.BitmapTransform")
         this.BitmapDecoderStatics := this.CreateClass("Windows.Graphics.Imaging.BitmapDecoder", IBitmapDecoderStatics := "{438CCB26-BCEF-4E95-BAD6-23A822E58D01}")
@@ -98,15 +98,15 @@ class OCR {
      * @returns {Ocr} 
      */
     __New(pIRandomAccessStream?, lang := "FirstFromAvailableLanguages") {
-        if IsSet(lang) || !this.__Static.HasOwnProp("CurrentLanguage")
-            this.__Static.LoadLanguage(lang?)
-        ComCall(14, this.__Static.BitmapDecoderStatics, "ptr", pIRandomAccessStream, "ptr*", BitmapDecoder:=this.__Static.IBase())   ; CreateAsync
-        this.__Static.WaitForAsync(&BitmapDecoder)
+        if IsSet(lang) || !this.__OCR.HasOwnProp("CurrentLanguage")
+            this.__OCR.LoadLanguage(lang?)
+        ComCall(14, this.__OCR.BitmapDecoderStatics, "ptr", pIRandomAccessStream, "ptr*", BitmapDecoder:=this.__OCR.IBase())   ; CreateAsync
+        this.__OCR.WaitForAsync(&BitmapDecoder)
         BitmapFrame := ComObjQuery(BitmapDecoder, IBitmapFrame := "{72A49A1C-8081-438D-91BC-94ECFC8185C6}")
         ComCall(12, BitmapFrame, "uint*", &width:=0)   ; get_PixelWidth
         ComCall(13, BitmapFrame, "uint*", &height:=0)   ; get_PixelHeight
-        if (width > this.__Static.MaxImageDimension) or (height > this.__Static.MaxImageDimension)
-           throw ValueError("Image is too big - " width "x" height ".`nIt should be maximum - " this.__Static.MaxImageDimension " pixels")
+        if (width > this.__OCR.MaxImageDimension) or (height > this.__OCR.MaxImageDimension)
+           throw ValueError("Image is too big - " width "x" height ".`nIt should be maximum - " this.__OCR.MaxImageDimension " pixels")
 
         BitmapFrameWithSoftwareBitmap := ComObjQuery(BitmapDecoder, IBitmapFrameWithSoftwareBitmap := "{FE287C9A-420C-4963-87AD-691436E08383}")
         if width < 40 || height < 40 {
@@ -115,19 +115,19 @@ class OCR {
             ComCall(9, this.BitmapTransform, "int", this.ImageHeight) ; put_ScaledHeight
             ComCall(8, BitmapFrame, "uint*", &BitmapPixelFormat:=0) ; get_BitmapPixelFormat
             ComCall(9, BitmapFrame, "uint*", &BitmapAlphaMode:=0) ; get_BitmapAlphaMode
-            ComCall(8, BitmapFrameWithSoftwareBitmap, "uint", BitmapPixelFormat, "uint", BitmapAlphaMode, "ptr", this.BitmapTransform, "uint", IgnoreExifOrientation := 0, "uint", DoNotColorManage := 0, "ptr*", SoftwareBitmap:=this.__Static.IBase()) ; GetSoftwareBitmapAsync
+            ComCall(8, BitmapFrameWithSoftwareBitmap, "uint", BitmapPixelFormat, "uint", BitmapAlphaMode, "ptr", this.BitmapTransform, "uint", IgnoreExifOrientation := 0, "uint", DoNotColorManage := 0, "ptr*", SoftwareBitmap:=this.__OCR.IBase()) ; GetSoftwareBitmapAsync
         } else {
             this.ImageWidth := width, this.ImageHeight := height
-            ComCall(6, BitmapFrameWithSoftwareBitmap, "ptr*", SoftwareBitmap:=this.__Static.IBase())   ; GetSoftwareBitmapAsync
+            ComCall(6, BitmapFrameWithSoftwareBitmap, "ptr*", SoftwareBitmap:=this.__OCR.IBase())   ; GetSoftwareBitmapAsync
         }
-        this.__Static.WaitForAsync(&SoftwareBitmap)
+        this.__OCR.WaitForAsync(&SoftwareBitmap)
 
-        ComCall(6, this.__Static.OcrEngine, "ptr", SoftwareBitmap, "ptr*", OcrResult:=this.__Static.IBase())   ; RecognizeAsync
-        this.__Static.WaitForAsync(&OcrResult)
+        ComCall(6, this.__OCR.OcrEngine, "ptr", SoftwareBitmap, "ptr*", OcrResult:=this.__OCR.IBase())   ; RecognizeAsync
+        this.__OCR.WaitForAsync(&OcrResult)
 
         ; Cleanup
-        this.__Static.CloseIClosable(pIRandomAccessStream)
-        this.__Static.CloseIClosable(SoftwareBitmap)
+        this.__OCR.CloseIClosable(pIRandomAccessStream)
+        this.__OCR.CloseIClosable(SoftwareBitmap)
 
         this.ptr := OcrResult.ptr, ObjAddRef(OcrResult.ptr)
     }
@@ -139,7 +139,7 @@ class OCR {
             ComCall(8, this, "ptr*", &hAllText:=0)   ; get_Text
             buf := DllCall("Combase.dll\WindowsGetStringRawBuffer", "ptr", hAllText, "uint*", &length:=0, "ptr")
             this.DefineProp("Text", {Value:StrGet(buf, "UTF-16")})
-            this.__Static.DeleteHString(hAllText)
+            this.__OCR.DeleteHString(hAllText)
             return this.Text
         }
     }
@@ -152,11 +152,11 @@ class OCR {
     ; Returns all Line objects for the result.
     Lines {
         get {
-            ComCall(6, this, "ptr*", LinesList:=this.__Static.IBase()) ; get_Lines
+            ComCall(6, this, "ptr*", LinesList:=this.__OCR.IBase()) ; get_Lines
             ComCall(7, LinesList, "int*", &count:=0) ; count
             lines := []
             loop count {
-                ComCall(6, LinesList, "int", A_Index-1, "ptr*", OcrLine:=this.__Static.OCRLine())               
+                ComCall(6, LinesList, "int", A_Index-1, "ptr*", OcrLine:=this.__OCR.OCRLine())               
                 lines.Push(OcrLine)
             }
             this.DefineProp("Lines", {Value:lines})
@@ -185,7 +185,7 @@ class OCR {
      */
     Click(Obj, WhichButton?, ClickCount?, DownOrUp?) {
         if !obj.HasOwnProp("x") && InStr(Type(obj), "OCR")
-            obj := this.__Static.WordsBoundingRect(obj.Words)
+            obj := this.__OCR.WordsBoundingRect(obj.Words)
         x := obj.x, y := obj.y, w := obj.w, h := obj.h
         if this.HasOwnProp("Relative") {
             if this.Relative.HasOwnProp("Hwnd") {
@@ -213,7 +213,7 @@ class OCR {
      */
     ControlClick(obj, WinTitle?, WinText?, WhichButton?, ClickCount?, Options?, ExcludeTitle?, ExcludeText?) {
         if !obj.HasOwnProp("x") && InStr(Type(obj), "OCR")
-            obj := this.__Static.WordsBoundingRect(obj.Words)
+            obj := this.__OCR.WordsBoundingRect(obj.Words)
         x := obj.x, y := obj.y, w := obj.w, h := obj.h
         if this.HasOwnProp("Relative") && this.Relative.HasOwnProp("Type") {
             hWnd := this.Relative.hWnd
@@ -263,8 +263,8 @@ class OCR {
             Loop 4
                 guis.Push(Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x08000000"))
         }
-        if Type(obj) = this.__Static.prototype.__Class ".OCRLine" || Type(obj) = this.__Static.prototype.__Class
-            obj := this.__Static.WordsBoundingRect(obj.Words*)
+        if Type(obj) = this.__OCR.prototype.__Class ".OCRLine" || Type(obj) = this.__OCR.prototype.__Class
+            obj := this.__OCR.WordsBoundingRect(obj.Words*)
         x := obj.x, y := obj.y, w := obj.w, h := obj.h
         if this.HasOwnProp("Relative")
             x += this.Relative.x, y += this.Relative.y
@@ -323,7 +323,7 @@ class OCR {
                         found.Push(word)
                         if found.Length == needleLen {
                             if ++counter == i {
-                                result := this.__Static.WordsBoundingRect(found*)
+                                result := this.__OCR.WordsBoundingRect(found*)
                                 result.Words := found
                                 return result
                             } else
@@ -374,7 +374,7 @@ class OCR {
                     if wordCompareFunc(t, splitNeedle[found.Length+1]) {
                         found.Push(word)
                         if found.Length == needleLen {
-                            result := this.__Static.WordsBoundingRect(found*)
+                            result := this.__OCR.WordsBoundingRect(found*)
                             result.Words := found
                             results.Push(result)
                             counter := 0, found := [], result := unset
@@ -407,14 +407,14 @@ class OCR {
             }
             if croppedWords.Length {
                 line := {Text:Trim(lineText), Words:croppedWords}
-                line.base.__Class := this.__Static.prototype.__Class ".OCRLine"
+                line.base.__Class := this.__OCR.prototype.__Class ".OCRLine"
                 croppedLines.Push(line)
                 croppedText .= lineText
             }
         }
         result.DefineProp("Lines", {Value:croppedLines})
         result.DefineProp("Text", {Value:Trim(croppedText)})
-        result.DefineProp("Words", this.__Static.Prototype.GetOwnPropDesc("Words"))
+        result.DefineProp("Words", this.__OCR.Prototype.GetOwnPropDesc("Words"))
         return result
     }
 
@@ -425,7 +425,7 @@ class OCR {
                 ComCall(7, this, "ptr*", &hText:=0)   ; get_Text
                 buf := DllCall("Combase.dll\WindowsGetStringRawBuffer", "ptr", hText, "uint*", &length:=0, "ptr")
                 text := StrGet(buf, "UTF-16")
-                this.__Static.DeleteHString(hText)
+                this.__OCR.DeleteHString(hText)
                 this.DefineProp("Text", {Value:text})
                 return text
             }
@@ -434,11 +434,11 @@ class OCR {
         ; Gets the Word objects for the line
         Words {
             get {
-                ComCall(6, this, "ptr*", WordsList:=this.__StaticSuper.IBase())   ; get_Words
+                ComCall(6, this, "ptr*", WordsList:=this.__OCR.IBase())   ; get_Words
                 ComCall(7, WordsList, "int*", &WordsCount:=0)   ; Words count
                 words := []
                 loop WordsCount {
-                   ComCall(6, WordsList, "int", A_Index-1, "ptr*", OcrWord:=this.__StaticSuper.OCRWord())
+                   ComCall(6, WordsList, "int", A_Index-1, "ptr*", OcrWord:=this.__OCR.OCRWord())
                    words.Push(OcrWord)
                 }
                 this.DefineProp("Words", {Value:words})
@@ -454,7 +454,7 @@ class OCR {
                 ComCall(7, this, "ptr*", &hText:=0)   ; get_Text
                 buf := DllCall("Combase.dll\WindowsGetStringRawBuffer", "ptr", hText, "uint*", &length:=0, "ptr")
                 text := StrGet(buf, "UTF-16")
-                this.__StaticSuper.DeleteHString(hText)
+                this.__OCR.DeleteHString(hText)
                 this.DefineProp("Text", {Value:text})
                 return text
             }
