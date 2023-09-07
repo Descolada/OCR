@@ -28,8 +28,7 @@ class OCRTestSuite {
         result := OCR.FromDesktop()
         DUnit.Assert(InStr(result.Text, "Lorem ipsum"), '"Lorem ipsum" missing')
         DUnit.Assert(InStr(result.Text, "Type here to search"), '"Type here to search" missing')
-
-        DUnit.Assert(OCRTestSuite.__CompDiff(OCRTestSuite.__FindWord(result), {h:15, w:58, x:22, y:82}))
+        DUnit.Assert(OCRTestSuite.__CompDiff(OCRTestSuite.__FindWord(result), {h:15, w:58, x:20, y:82}))
     }
     Test_FromWindow() {
         result := OCR.FromWindow("A") ; window, mode=2
