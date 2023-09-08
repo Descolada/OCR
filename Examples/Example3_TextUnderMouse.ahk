@@ -3,6 +3,8 @@
 CoordMode "Mouse", "Screen"
 CoordMode "ToolTip", "Screen"
 
+DllCall("SetThreadDpiAwarenessContext", "ptr", -3) ; Needed for multi-monitor setups with differing DPIs
+
 Loop {
     MouseGetPos(&X, &Y)
     Highlight(x-75, y-25, 150, 50)
