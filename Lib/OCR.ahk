@@ -78,10 +78,9 @@ class OCR {
 
     static __New() {
         this.prototype.__OCR := this
-        this.OCRLine.base := this.IBase ; OCRLine extends OCR.IBase
-        this.OCRLine.prototype.__OCR := this
-        this.OCRWord.base := this.IBase ; OCRWord extends OCR.IBase
-        this.OCRWord.prototype.__OCR := this
+        this.IBase.prototype.__OCR := this
+        this.OCRLine.base := this.IBase, this.OCRLine.prototype.base := this.IBase.prototype ; OCRLine extends OCR.IBase
+        this.OCRWord.base := this.IBase, this.OCRWord.prototype.base := this.IBase.prototype ; OCRWord extends OCR.IBase
         this.LanguageFactory := this.CreateClass("Windows.Globalization.Language", ILanguageFactory := "{9B0252AC-0C27-44F8-B792-9793FB66C63E}")
         this.BitmapTransform := this.CreateClass("Windows.Graphics.Imaging.BitmapTransform")
         this.BitmapDecoderStatics := this.CreateClass("Windows.Graphics.Imaging.BitmapDecoder", IBitmapDecoderStatics := "{438CCB26-BCEF-4E95-BAD6-23A822E58D01}")
@@ -557,9 +556,15 @@ class OCR {
      * Returns an OCR results object for the whole desktop. Locations of the words will be relative to
      * the screen (CoordMode "Screen")
      * @param lang OCR language. Default is first from available languages.
+     * @param scale The scaling factor to use.
+     * @param monitor The monitor from which to get the desktop area. Default is primary monitor.
+     *   If screen scaling between monitors differs, then use DllCall("SetThreadDpiAwarenessContext", "ptr", -3)
      * @returns {Ocr} 
      */
-    static FromDesktop(lang?, scale:=1) => this.FromRect(0, 0, A_ScreenWidth, A_ScreenHeight, lang?, scale)
+    static FromDesktop(lang?, scale:=1, monitor?) {
+        MonitorGet(monitor?, &Left, &Top, &Right, &Bottom)
+        return this.FromRect(Left, Top, Right-Left, Bottom-Top, lang?, scale)
+    }
 
     /**
      * Returns an OCR results object for a region of the screen. Locations of the words will be relative
