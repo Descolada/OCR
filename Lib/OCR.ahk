@@ -19,6 +19,8 @@
  *      Calls a func (the provided OCR method) until a string is found
  * OCR.WordsBoundingRect(words*)
  *      Returns the bounding rectangle for multiple words
+ * OCR.ClearAllHighlights()
+ *      Removes all highlights created by Result.Highlight
  * 
  * Properties:
  * OCR.MaxImageDimension
@@ -40,8 +42,8 @@
  *      Clicks an object (Word, FindString result etc)
  * Result.ControlClick(obj, WinTitle?, WinText?, WhichButton?, ClickCount?, Options?, ExcludeTitle?, ExcludeText?)
  *      ControlClicks an object (Word, FindString result etc)
- * Result.Highlight(obj?, showTime:=2000, color:="Red", d:=2)
- *      Highlights a Word, Line, or object with {x,y,w,h} properties on the screen, or removes the highlighting
+ * Result.Highlight(obj?, showTime?, color:="Red", d:=2)
+ *      Highlights a Word, Line, or object with {x,y,w,h} properties on the screen (default: 2 seconds), or removes the highlighting
  * Result.Crop(x1, y1, x2, y2)
  *      Crops the result object to contain only results from an area defined by points (x1,y1) and (x2,y2).
  * 
@@ -242,48 +244,73 @@ class OCR {
      * If this object (the one Highlight is called from) contains a "Relative" property (this is
      * added by default with OCR.FromWindow), then its values will be added to the x and y coordinates as offsets.
      * @param {number} showTime Default is 2 seconds.
-     * * Unset - if highlighting exists then removes the highlighting
+     * * Unset - if highlighting exists then removes the highlighting, otherwise pauses for 2 seconds
      * * 0 - Indefinite highlighting
      * * Positive integer (eg 2000) - will highlight and pause for the specified amount of time in ms
      * * Negative integer - will highlight for the specified amount of time in ms, but script execution will continue
+     * * "clear" - removes the highlighting unconditionally
+     * * "clearall" - remove highlightings from all OCR objects
      * @param {string} color The color of the highlighting. Default is red.
      * @param {number} d The border thickness of the highlighting in pixels. Default is 2.
      * @returns {OCR}
      */
-    Highlight(obj?, showTime:=2000, color:="Red", d:=2) {
-        static guis := []
-        if !IsSet(obj) {
-            for _, r in guis
-                r.Destroy()
-            guis := []
+    Highlight(obj?, showTime?, color:="Red", d:=2) {
+        static Guis := Map()
+        ; obj set & showTime unset => either highlights for 2s, or removes highlight
+        ; obj set & clear => removes highlight
+        ; obj unset => clears all highlights unconditionally
+        if IsSet(showTime) && showTime = "clearall" {
+            for key, resultObjs in Guis { ; enum all OCR result objects
+                for key2, ObjGui in resultObjs
+                    ObjGui.Destroy()
+            }
+            Guis := Map()
             return this
         }
-        if !guis.Length {
-            Loop 4
-                guis.Push(Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x08000000"))
+        if !Guis.Has(this.ptr)
+            Guis[this.ptr] := Map()
+
+        if !IsSet(obj) {
+            for key, ObjGui in Guis[this.ptr] ; enumerate all previously used obj arguments and remove GUIs
+                ObjGui.Destroy()
+            Guis.Delete(this.ptr)
+            return this
         }
+        ; Otherwise obj is set
+        if !IsObject(obj)
+            throw ValueError("First argument 'obj' must be an object", -1)
+        ResultGuis := Guis[this.ptr]
+
+        if (!IsSet(showTime) && ResultGuis.Has(obj)) || (IsSet(showTime) && showTime = "clear") {
+                try ResultGuis[obj].Destroy()
+                ResultGuis.Delete(obj)
+                return this
+        } else if !IsSet(showTime)
+            showTime := 2000
+
         if Type(obj) = this.__OCR.prototype.__Class ".OCRLine" || Type(obj) = this.__OCR.prototype.__Class
-            obj := this.__OCR.WordsBoundingRect(obj.Words*)
-        x := obj.x, y := obj.y, w := obj.w, h := obj.h
+            rect := this.__OCR.WordsBoundingRect(obj.Words*)
+        else 
+            rect := obj
+        x := rect.x, y := rect.y, w := rect.w, h := rect.h
         if this.HasOwnProp("Relative")
             x += this.Relative.x, y += this.Relative.y
 
-        Loop 4 {
-            i:=A_Index
-            , x1:=(i=2 ? x+w : x-d)
-            , y1:=(i=3 ? y+h : y-d)
-            , w1:=(i=1 or i=3 ? w+2*d : d)
-            , h1:=(i=2 or i=4 ? h+2*d : d)
-            guis[i].BackColor := color
-            guis[i].Show("NA x" . x1 . " y" . y1 . " w" . w1 . " h" . h1)
-        }
+        ResultGuis[obj] := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x08000000")
+        ResultGuis[obj].BackColor := color
+        iw:= w+d, ih:= h+d, w:=w+d*2, h:=h+d*2, x:=x-d, y:=y-d
+        WinSetRegion("0-0 " w "-0 " w "-" h " 0-" h " 0-0 " d "-" d " " iw "-" d " " iw "-" ih " " d "-" ih " " d "-" d, ResultGuis[obj].Hwnd)
+        ResultGuis[obj].Show("NA x" . x . " y" . y . " w" . w . " h" . h)
+
         if showTime > 0 {
             Sleep(showTime)
-            this.Highlight()
+            this.Highlight(obj)
         } else if showTime < 0
-            SetTimer(this.GetMethod("Highlight"), -Abs(showTime))
+            SetTimer(ObjBindMethod(this, "Highlight", obj, "clear"), -Abs(showTime))
         return this
     }
+    ClearHighlight(obj) => this.Highlight(obj, "clear")
+    static ClearAllHighlights() => this.Prototype.Highlight(,"clearall")
 
     /**
      * Finds a string in the search results. Returns {x,y,w,h,Words} where Words contains an array of the matching Word objects.
