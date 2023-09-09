@@ -261,8 +261,10 @@ class OCR {
         ; obj unset => clears all highlights unconditionally
         if IsSet(showTime) && showTime = "clearall" {
             for key, resultObjs in Guis { ; enum all OCR result objects
-                for key2, ObjGui in resultObjs
-                    ObjGui.Destroy()
+                for key2, oObj in resultObjs {
+                    try oObj.GuiObj.Destroy()
+                    SetTimer(oObj.TimerObj, 0)
+                }
             }
             Guis := Map()
             return this
@@ -271,8 +273,10 @@ class OCR {
             Guis[this.ptr] := Map()
 
         if !IsSet(obj) {
-            for key, ObjGui in Guis[this.ptr] ; enumerate all previously used obj arguments and remove GUIs
-                ObjGui.Destroy()
+            for key, oObj in Guis[this.ptr] { ; enumerate all previously used obj arguments and remove GUIs
+                try oObj.GuiObj.Destroy()
+                SetTimer(oObj.TimerObj, 0)
+            }
             Guis.Delete(this.ptr)
             return this
         }
@@ -282,7 +286,8 @@ class OCR {
         ResultGuis := Guis[this.ptr]
 
         if (!IsSet(showTime) && ResultGuis.Has(obj)) || (IsSet(showTime) && showTime = "clear") {
-                try ResultGuis[obj].Destroy()
+                try ResultGuis[obj].GuiObj.Destroy()
+                SetTimer(ResultGuis[obj].TimerObj, 0)
                 ResultGuis.Delete(obj)
                 return this
         } else if !IsSet(showTime)
@@ -296,17 +301,22 @@ class OCR {
         if this.HasOwnProp("Relative")
             x += this.Relative.x, y += this.Relative.y
 
-        ResultGuis[obj] := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x08000000")
-        ResultGuis[obj].BackColor := color
+        if !ResultGuis.Has(obj) {
+            ResultGuis[obj] := {}
+            ResultGuis[obj].GuiObj := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x08000000")
+            ResultGuis[obj].TimerObj := ObjBindMethod(this, "Highlight", obj, "clear")
+        }
+        GuiObj := ResultGuis[obj].GuiObj
+        GuiObj.BackColor := color
         iw:= w+d, ih:= h+d, w:=w+d*2, h:=h+d*2, x:=x-d, y:=y-d
-        WinSetRegion("0-0 " w "-0 " w "-" h " 0-" h " 0-0 " d "-" d " " iw "-" d " " iw "-" ih " " d "-" ih " " d "-" d, ResultGuis[obj].Hwnd)
-        ResultGuis[obj].Show("NA x" . x . " y" . y . " w" . w . " h" . h)
+        WinSetRegion("0-0 " w "-0 " w "-" h " 0-" h " 0-0 " d "-" d " " iw "-" d " " iw "-" ih " " d "-" ih " " d "-" d, GuiObj.Hwnd)
+        GuiObj.Show("NA x" . x . " y" . y . " w" . w . " h" . h)
 
         if showTime > 0 {
             Sleep(showTime)
             this.Highlight(obj)
         } else if showTime < 0
-            SetTimer(ObjBindMethod(this, "Highlight", obj, "clear"), -Abs(showTime))
+            SetTimer(ResultGuis[obj].TimerObj, -Abs(showTime))
         return this
     }
     ClearHighlight(obj) => this.Highlight(obj, "clear")
