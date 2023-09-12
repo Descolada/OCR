@@ -112,11 +112,11 @@ class OCR {
         BitmapFrameWithSoftwareBitmap := ComObjQuery(BitmapDecoder, IBitmapFrameWithSoftwareBitmap := "{FE287C9A-420C-4963-87AD-691436E08383}")
         if width < 40 || height < 40 {
             scale := 40.0 / Min(width, height), this.ImageWidth := Ceil(width*scale), this.ImageHeight := Ceil(height*scale)
-            ComCall(7, this.BitmapTransform, "int", this.ImageWidth) ; put_ScaledWidth
-            ComCall(9, this.BitmapTransform, "int", this.ImageHeight) ; put_ScaledHeight
+            ComCall(7, this.__OCR.BitmapTransform, "int", this.ImageWidth) ; put_ScaledWidth
+            ComCall(9, this.__OCR.BitmapTransform, "int", this.ImageHeight) ; put_ScaledHeight
             ComCall(8, BitmapFrame, "uint*", &BitmapPixelFormat:=0) ; get_BitmapPixelFormat
             ComCall(9, BitmapFrame, "uint*", &BitmapAlphaMode:=0) ; get_BitmapAlphaMode
-            ComCall(8, BitmapFrameWithSoftwareBitmap, "uint", BitmapPixelFormat, "uint", BitmapAlphaMode, "ptr", this.BitmapTransform, "uint", IgnoreExifOrientation := 0, "uint", DoNotColorManage := 0, "ptr*", SoftwareBitmap:=this.__OCR.IBase()) ; GetSoftwareBitmapAsync
+            ComCall(8, BitmapFrameWithSoftwareBitmap, "uint", BitmapPixelFormat, "uint", BitmapAlphaMode, "ptr", this.__OCR.BitmapTransform, "uint", IgnoreExifOrientation := 0, "uint", DoNotColorManage := 0, "ptr*", SoftwareBitmap:=this.__OCR.IBase()) ; GetSoftwareBitmapAsync
         } else {
             this.ImageWidth := width, this.ImageHeight := height
             ComCall(6, BitmapFrameWithSoftwareBitmap, "ptr*", SoftwareBitmap:=this.__OCR.IBase())   ; GetSoftwareBitmapAsync
@@ -182,23 +182,25 @@ class OCR {
      * @param Obj The object to click, which can be a OCR result object, Line, Word, or Object {x,y,w,h}
      * If this object (the one Click is called from) contains a "Relative" property (this is
      * added by default with OCR.FromWindow) containing a Hwnd property, then that window will be activated,
-     * otherwise the Relative properties values will be added to the x and y coordinates as offsets.
+     * otherwise the Relative objects Window.xy/Client.xy properties values will be added to the x and y coordinates as offsets.
      */
     Click(Obj, WhichButton?, ClickCount?, DownOrUp?) {
         if !obj.HasOwnProp("x") && InStr(Type(obj), "OCR")
             obj := this.__OCR.WordsBoundingRect(obj.Words)
-        x := obj.x, y := obj.y, w := obj.w, h := obj.h
+        x := obj.x, y := obj.y, w := obj.w, h := obj.h, mode := "Screen"
         if this.HasOwnProp("Relative") {
-            if this.Relative.HasOwnProp("Hwnd") {
-                if !WinActive(this.Relative.Hwnd) {
-                    WinActivate(this.Relative.Hwnd)
-                    WinWaitActive(this.Relative.Hwnd,,1)
-                }
-            } else
-                x += this.Relative.x, y += this.Relative.y
+            if this.Relative.HasOwnProp("Window")
+                mode := "Window", hwnd := this.Relative.Window.Hwnd
+            else if this.Relative.HasOwnProp("Client")
+                mode := "Client", hwnd := this.Relative.Client.Hwnd
+            if IsSet(hwnd) && !WinActive(hwnd) {
+                WinActivate(hwnd)
+                WinWaitActive(hwnd,,1)
+            }
+            x += this.Relative.%mode%.x, y += this.Relative.%mode%.y
         }
         oldCoordMode := A_CoordModeMouse
-        CoordMode "Mouse", this.HasOwnProp("Relative") && this.Relative.HasOwnProp("Type") ? this.Relative.Type : "Screen"
+        CoordMode "Mouse", mode
         Click(x+w//2, y+h//2, WhichButton?, ClickCount?, DownOrUp?)
         CoordMode "Mouse", oldCoordMode
     }
@@ -216,9 +218,10 @@ class OCR {
         if !obj.HasOwnProp("x") && InStr(Type(obj), "OCR")
             obj := this.__OCR.WordsBoundingRect(obj.Words)
         x := obj.x, y := obj.y, w := obj.w, h := obj.h
-        if this.HasOwnProp("Relative") && this.Relative.HasOwnProp("Type") {
-            hWnd := this.Relative.hWnd
-            if this.Relative.Type = "Window" {
+        if this.HasOwnProp("Relative") && (this.Relative.HasOwnProp("Client") || this.Relative.HasOwnProp("Window")) {
+            mode := this.Relative.HasOwnProp("Client") ? "Client" : "Window"
+            , obj := this.Relative.%mode%, x := obj.x, y := obj.y, hWnd := obj.hWnd
+            if mode = "Window" {
                 ; Window -> Client
                 RECT := Buffer(16, 0), pt := Buffer(8, 0)
                 DllCall("user32\GetWindowRect", "Ptr", hWnd, "Ptr", RECT)
@@ -298,8 +301,8 @@ class OCR {
         else 
             rect := obj
         x := rect.x, y := rect.y, w := rect.w, h := rect.h
-        if this.HasOwnProp("Relative")
-            x += this.Relative.x, y += this.Relative.y
+        if this.HasOwnProp("Relative") && this.Relative.HasOwnProp("Screen")
+            x += this.Relative.Screen.X, y += this.Relative.Screen.Y
 
         if !ResultGuis.Has(obj) {
             ResultGuis[obj] := {}
@@ -545,11 +548,16 @@ class OCR {
 
     /**
      * Returns an OCR results object for a given window. Locations of the words will be relative to the
-     * window or client area, so for interactions use CoordMode "Window" or "Client".
+     * window or client area, so for interactions use CoordMode "Window" or "Client". If onlyClientArea
+     * contained relative coordinates then Result coordinates will also be relative to the captured area.
+     * In that case offsets for Window/Client area are stored in Result.Relative.Client.x and y or .Window.x and y.
+     * Additionally, Result.Relative.Screen.x and y are also stored. 
      * @param WinTitle A window title or other criteria identifying the target window.
      * @param lang OCR language. Default is first from available languages.
      * @param scale The scaling factor to use.
-     * @param {Number} onlyClientArea Whether only the client area or the whole window should be OCR-d
+     * @param {Number, Object} onlyClientArea Whether only the client area or the whole window should be OCR-d
+     *     This can also be an object which must contain {X,Y,W,H} (relative coordinates from where to OCR) 
+     *     and optionally onlyClientArea property (0 or 1, default is 0).
      * @param {Number} mode Different methods of capturing the window. 0 = uses GetDC with BitBlt, 2 = uses PrintWindow. 
      * Add 1 to make a transparent window totally opaque. 
      * @returns {Ocr} 
@@ -565,33 +573,46 @@ class OCR {
             While (WinGetTransparent(hwnd) != 255 && ++i < 30)
                 Sleep 100
         }
-        If onlyClientArea {
+        if IsObject(onlyClientArea) {
+            X := onlyClientArea.X, Y := onlyClientArea.Y, W := onlyClientArea.W, H := onlyClientArea.H, flagOnlyClientArea := onlyClientArea.onlyClientArea
+            if !onlyClientArea.HasOwnProp("onlyClientArea") 
+                onlyClientArea.onlyClientArea := 0
+        } else
+            X := 0, Y := 0, W := 0, H := 0, flagOnlyClientArea := onlyClientArea
+        If flagOnlyClientArea = 1 {
             DllCall("GetClientRect", "ptr", hwnd, "ptr", rc:=Buffer(16))
-            W := NumGet(rc, 8, "int"), H := NumGet(rc, 12, "int")
+            if !W
+                W := NumGet(rc, 8, "int"), H := NumGet(rc, 12, "int")
             pt:=Buffer(8, 0), NumPut("int64", 0, pt)
             DllCall("ClientToScreen", "Ptr", hwnd, "Ptr", pt)
-            X:=NumGet(pt,"int"), Y:=NumGet(pt,4,"int")
+            X += NumGet(pt,"int"), Y += NumGet(pt,4,"int")
         } else {
             rect := Buffer(16, 0)
             DllCall("GetWindowRect", "UPtr", hwnd, "Ptr", rect, "UInt")
-            X := NumGet(rect, 0, "Int"), Y := NumGet(rect, 4, "Int")
-            x2 := NumGet(rect, 8, "Int"), y2 := NumGet(rect, 12, "Int")
-            W := Abs(Max(X, X2) - Min(X, X2))
-            H := Abs(Max(Y, Y2) - Min(Y, Y2))
+            X += NumGet(rect, 0, "Int"), Y += NumGet(rect, 4, "Int")
+            if !W
+                x2 := NumGet(rect, 8, "Int"), y2 := NumGet(rect, 12, "Int")
+                , W := Abs(Max(X, X2) - Min(X, X2)), H := Abs(Max(Y, Y2) - Min(Y, Y2))
         }
         hBitMap := this.CreateBitmap(X, Y, W, H, hWnd, scale, onlyClientArea, mode)
         ;this.DisplayHBitmap(hBitMap)
         if mode&1
             WinSetExStyle(oldStyle, hwnd)
         result := this(this.HBitmapToRandomAccessStream(hBitMap), lang?)
-        result.Relative := {X:X, Y:Y, Type:(onlyClientArea ? "Client" : "Window"), Hwnd:hWnd}
+        result.Relative := {Screen:{X:X, Y:Y}}
+        if IsObject(onlyClientArea)
+            result.Relative.%(flagOnlyClientArea = 1 ? "Client" : "Window")% := {X:onlyClientArea.X, Y:onlyClientArea.Y, Hwnd:hWnd}
+        else
+            result.Relative.%(flagOnlyClientArea = 1 ? "Client" : "Window")% := {X:0, Y:0, Hwnd:hWnd}
         this.NormalizeCoordinates(result, scale)
         return result
     }
 
     /**
      * Returns an OCR results object for the whole desktop. Locations of the words will be relative to
-     * the screen (CoordMode "Screen")
+     * the screen (CoordMode "Screen") in a single-monitor setup. If "monitor" argument is specified
+     * then coordinates might be relative to the monitor, whereas relative offsets will be stored in
+     * Result.Relative.Screen.x and y properties. 
      * @param lang OCR language. Default is first from available languages.
      * @param scale The scaling factor to use.
      * @param monitor The monitor from which to get the desktop area. Default is primary monitor.
@@ -605,7 +626,8 @@ class OCR {
 
     /**
      * Returns an OCR results object for a region of the screen. Locations of the words will be relative
-     * to the top left corner of the rectangle.
+     * to the top left corner of the rectangle. The return object will contain Relative.Screen.x and y properties
+     * which are the original x and y that FromRect was called with.
      * @param x Screen x coordinate
      * @param y Screen y coordinate
      * @param w Region width. Maximum is OCR.MaxImageDimension; minimum is 40 pixels (source: user FanaticGuru in AutoHotkey forums), smaller images will be scaled to at least 40 pixels.
@@ -618,7 +640,7 @@ class OCR {
     static FromRect(x, y, w, h, lang?, scale:=1) {
         hBitmap := this.CreateBitmap(X, Y, W, H,,scale)
         result := this(this.HBitmapToRandomAccessStream(hBitmap), lang?)
-        result.Relative := {x:x, y:y}
+        result.Relative := {Screen:{x:x, y:y}}
         return this.NormalizeCoordinates(result, scale)
     }
 
@@ -737,19 +759,22 @@ class OCR {
         }
         sW := W*scale, sH := H*scale
         if hWnd {
+            if IsObject(onlyClientArea)
+                X := onlyClientArea.X, Y := onlyClientArea.Y, flagOnlyClientArea := onlyClientArea.onlyClientArea
+            else
+                X := 0, Y := 0, flagOnlyClientArea := onlyClientArea
             if mode < 2 {
-                X := 0, Y := 0
-                HDC := DllCall("GetDCEx", "Ptr", hWnd, "Ptr", 0, "int", 2|!onlyClientArea, "Ptr")
+                HDC := DllCall("GetDCEx", "Ptr", hWnd, "Ptr", 0, "int", 2|!flagOnlyClientArea, "Ptr")
             } else {
                 hbm := this.CreateDIBSection(W, H)
                 hdc := DllCall("CreateCompatibleDC", "Ptr", 0, "UPtr")
                 obm := DllCall("SelectObject", "Ptr", HDC, "Ptr", HBM)
-                DllCall("PrintWindow", "uint", hwnd, "uint", hdc, "uint", 2|!!onlyClientArea)
+                DllCall("PrintWindow", "uint", hwnd, "uint", hdc, "uint", 2|!!flagOnlyClientArea)
                 if scale != 1 {
                     PDC := DllCall("CreateCompatibleDC", "Ptr", HDC, "UPtr")
                     hbm2 := DllCall("CreateCompatibleBitmap", "Ptr", HDC, "Int", sW, "Int", sH, "UPtr")
                     DllCall("SelectObject", "Ptr", PDC, "Ptr", HBM2)
-                    DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", sW, "Int", sH, "Ptr", HDC, "Int", 0, "Int", 0, "Int", W, "Int", H, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY
+                    DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", sW, "Int", sH, "Ptr", HDC, "Int", X, "Int", Y, "Int", W, "Int", H, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY
                     DllCall("DeleteDC", "Ptr", PDC)
                     DllCall("DeleteObject", "UPtr", HBM)
                     hbm := hbm2
