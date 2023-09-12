@@ -574,9 +574,9 @@ class OCR {
                 Sleep 100
         }
         if IsObject(onlyClientArea) {
-            X := onlyClientArea.X, Y := onlyClientArea.Y, W := onlyClientArea.W, H := onlyClientArea.H, flagOnlyClientArea := onlyClientArea.onlyClientArea
             if !onlyClientArea.HasOwnProp("onlyClientArea") 
                 onlyClientArea.onlyClientArea := 0
+            X := onlyClientArea.X, Y := onlyClientArea.Y, W := onlyClientArea.W, H := onlyClientArea.H, flagOnlyClientArea := onlyClientArea.onlyClientArea
         } else
             X := 0, Y := 0, W := 0, H := 0, flagOnlyClientArea := onlyClientArea
         If flagOnlyClientArea = 1 {
@@ -584,12 +584,12 @@ class OCR {
             if !W
                 W := NumGet(rc, 8, "int"), H := NumGet(rc, 12, "int")
             pt:=Buffer(8, 0), NumPut("int64", 0, pt)
-            DllCall("ClientToScreen", "Ptr", hwnd, "Ptr", pt)
-            X += NumGet(pt,"int"), Y += NumGet(pt,4,"int")
+            , DllCall("ClientToScreen", "Ptr", hwnd, "Ptr", pt)
+            , X += NumGet(pt,"int"), Y += NumGet(pt,4,"int")
         } else {
             rect := Buffer(16, 0)
-            DllCall("GetWindowRect", "UPtr", hwnd, "Ptr", rect, "UInt")
-            X += NumGet(rect, 0, "Int"), Y += NumGet(rect, 4, "Int")
+            , DllCall("GetWindowRect", "UPtr", hwnd, "Ptr", rect, "UInt")
+            , X += NumGet(rect, 0, "Int"), Y += NumGet(rect, 4, "Int")
             if !W
                 x2 := NumGet(rect, 8, "Int"), y2 := NumGet(rect, 12, "Int")
                 , W := Abs(Max(X, X2) - Min(X, X2)), H := Abs(Max(Y, Y2) - Min(Y, Y2))
@@ -599,7 +599,7 @@ class OCR {
         if mode&1
             WinSetExStyle(oldStyle, hwnd)
         result := this(this.HBitmapToRandomAccessStream(hBitMap), lang?)
-        result.Relative := {Screen:{X:X, Y:Y}}
+        , result.Relative := {Screen:{X:X, Y:Y}}
         if IsObject(onlyClientArea)
             result.Relative.%(flagOnlyClientArea = 1 ? "Client" : "Window")% := {X:onlyClientArea.X, Y:onlyClientArea.Y, Hwnd:hWnd}
         else
@@ -639,8 +639,8 @@ class OCR {
      */
     static FromRect(x, y, w, h, lang?, scale:=1) {
         hBitmap := this.CreateBitmap(X, Y, W, H,,scale)
-        result := this(this.HBitmapToRandomAccessStream(hBitmap), lang?)
-        result.Relative := {Screen:{x:x, y:y}}
+        , result := this(this.HBitmapToRandomAccessStream(hBitmap), lang?)
+        , result.Relative := {Screen:{x:x, y:y}}
         return this.NormalizeCoordinates(result, scale)
     }
 
@@ -658,9 +658,7 @@ class OCR {
      * @returns {String} 
      */
     static GetAvailableLanguages() {
-        static GlobalizationPreferencesStatics
-        if !IsSet(GlobalizationPreferencesStatics)
-            GlobalizationPreferencesStatics := this.CreateClass("Windows.System.UserProfile.GlobalizationPreferences", IGlobalizationPreferencesStatics := "{01BF4326-ED37-4E96-B0E9-C1340D1EA158}")
+        static GlobalizationPreferencesStatics := this.CreateClass("Windows.System.UserProfile.GlobalizationPreferences", IGlobalizationPreferencesStatics := "{01BF4326-ED37-4E96-B0E9-C1340D1EA158}")
         ComCall(9, GlobalizationPreferencesStatics, "ptr*", &LanguageList:=0)   ; get_Languages
         ComCall(7, LanguageList, "int*", &count:=0)   ; count
         Loop count {
@@ -690,9 +688,9 @@ class OCR {
             ComCall(10, this.OcrEngineStatics, "ptr*", OcrEngine:=this.IBase())   ; TryCreateFromUserProfileLanguages
         else {
             hString := this.CreateHString(lang)
-            ComCall(6, this.LanguageFactory, "ptr", hString, "ptr*", Language:=this.IBase())   ; CreateLanguage
-            this.DeleteHString(hString)
-            ComCall(9, this.OcrEngineStatics, "ptr", Language, "ptr*", OcrEngine:=this.IBase())   ; TryCreateFromLanguage
+            , ComCall(6, this.LanguageFactory, "ptr", hString, "ptr*", Language:=this.IBase())   ; CreateLanguage
+            , this.DeleteHString(hString)
+            , ComCall(9, this.OcrEngineStatics, "ptr", Language, "ptr*", OcrEngine:=this.IBase())   ; TryCreateFromLanguage
         }
         if (OcrEngine.ptr = 0)
             Throw Error("Can not use language `"" lang "`" for OCR, please install language pack.")
@@ -752,32 +750,27 @@ class OCR {
     }
 
     static CreateBitmap(X, Y, W, H, hWnd := 0, scale:=1, onlyClientArea:=0, mode:=2) {
-        static CAPTUREBLT
-        if !IsSet(CAPTUREBLT) {
-            DllCall("Dwmapi\DwmIsCompositionEnabled", "Int*", &compositionEnabled:=0)
-            CAPTUREBLT:= compositionEnabled ? 0 : 0x40000000
-        }
+        static CAPTUREBLT := InitCaptureBlt()
         sW := W*scale, sH := H*scale
         if hWnd {
+            X := 0, Y := 0, flagOnlyClientArea := onlyClientArea
             if IsObject(onlyClientArea)
                 X := onlyClientArea.X, Y := onlyClientArea.Y, flagOnlyClientArea := onlyClientArea.onlyClientArea
-            else
-                X := 0, Y := 0, flagOnlyClientArea := onlyClientArea
             if mode < 2 {
                 HDC := DllCall("GetDCEx", "Ptr", hWnd, "Ptr", 0, "int", 2|!flagOnlyClientArea, "Ptr")
             } else {
                 hbm := this.CreateDIBSection(W, H)
-                hdc := DllCall("CreateCompatibleDC", "Ptr", 0, "UPtr")
-                obm := DllCall("SelectObject", "Ptr", HDC, "Ptr", HBM)
-                DllCall("PrintWindow", "uint", hwnd, "uint", hdc, "uint", 2|!!flagOnlyClientArea)
+                , hdc := DllCall("CreateCompatibleDC", "Ptr", 0, "UPtr")
+                , obm := DllCall("SelectObject", "Ptr", HDC, "Ptr", HBM)
+                , DllCall("PrintWindow", "uint", hwnd, "uint", hdc, "uint", 2|!!flagOnlyClientArea)
                 if scale != 1 {
                     PDC := DllCall("CreateCompatibleDC", "Ptr", HDC, "UPtr")
-                    hbm2 := DllCall("CreateCompatibleBitmap", "Ptr", HDC, "Int", sW, "Int", sH, "UPtr")
-                    DllCall("SelectObject", "Ptr", PDC, "Ptr", HBM2)
-                    DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", sW, "Int", sH, "Ptr", HDC, "Int", X, "Int", Y, "Int", W, "Int", H, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY
-                    DllCall("DeleteDC", "Ptr", PDC)
-                    DllCall("DeleteObject", "UPtr", HBM)
-                    hbm := hbm2
+                    , hbm2 := DllCall("CreateCompatibleBitmap", "Ptr", HDC, "Int", sW, "Int", sH, "UPtr")
+                    , DllCall("SelectObject", "Ptr", PDC, "Ptr", HBM2)
+                    , DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", sW, "Int", sH, "Ptr", HDC, "Int", X, "Int", Y, "Int", W, "Int", H, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY
+                    , DllCall("DeleteDC", "Ptr", PDC)
+                    , DllCall("DeleteObject", "UPtr", HBM)
+                    , hbm := hbm2
                 }
                 DllCall("DeleteDC", "Ptr", HDC)
                 return this.IBase(HBM).DefineProp("__Delete", {call:(*)=>DllCall("DeleteObject", "UPtr", HBM)})
@@ -786,14 +779,19 @@ class OCR {
             HDC := DllCall("GetDC", "Ptr", 0, "UPtr")
         }
         HBM := DllCall("CreateCompatibleBitmap", "Ptr", HDC, "Int", Max(40,sW), "Int", Max(40,sH), "UPtr")
-        PDC := DllCall("CreateCompatibleDC", "Ptr", HDC, "UPtr")
-        DllCall("SelectObject", "Ptr", PDC, "Ptr", HBM)
+        , PDC := DllCall("CreateCompatibleDC", "Ptr", HDC, "UPtr")
+        , DllCall("SelectObject", "Ptr", PDC, "Ptr", HBM)
         if sW < 40 || sH < 40 ; Fills the bitmap so it's at least 40x40, which seems to improve recognition
             DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", Max(40,sW), "Int", Max(40,sH), "Ptr", HDC, "Int", X, "Int", Y, "Int", 1, "Int", 1, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY. 
         DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", sW, "Int", sH, "Ptr", HDC, "Int", X, "Int", Y, "Int", W, "Int", H, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY
-        DllCall("DeleteDC", "Ptr", PDC)
-        DllCall("ReleaseDC", "Ptr", 0, "Ptr", HDC)
+        , DllCall("DeleteDC", "Ptr", PDC)
+        , DllCall("ReleaseDC", "Ptr", 0, "Ptr", HDC)
         return this.IBase(HBM).DefineProp("__Delete", {call:(*)=>DllCall("DeleteObject", "UPtr", HBM)})
+
+        InitCaptureBlt() {
+            DllCall("Dwmapi\DwmIsCompositionEnabled", "Int*", &compositionEnabled:=0)
+            return compositionEnabled ? 0 : 0x40000000
+        }
     }
 
     static HBitmapToRandomAccessStream(hBitmap) {
@@ -802,15 +800,13 @@ class OCR {
              , sz := 8 + A_PtrSize*2
              
         DllCall("Ole32\CreateStreamOnHGlobal", "Ptr", 0, "UInt", true, "Ptr*", pIStream:=this.IBase(), "UInt")
-        
-        PICTDESC := Buffer(sz, 0)
-        NumPut("uint", sz, "uint", PICTYPE_BITMAP, "ptr", IsInteger(hBitmap) ? hBitmap : hBitmap.ptr, PICTDESC)
-        riid := this.CLSIDFromString(this.IID_IPicture)
-        DllCall("OleAut32\OleCreatePictureIndirect", "Ptr", PICTDESC, "Ptr", riid, "UInt", 0, "Ptr*", pIPicture:=this.IBase(), "UInt")
-        ; IPicture::SaveAsFile
-        ComCall(15, pIPicture, "Ptr", pIStream, "UInt", true, "uint*", &size:=0, "UInt")
-        riid := this.CLSIDFromString(this.IID_IRandomAccessStream)
-        DllCall("ShCore\CreateRandomAccessStreamOverStream", "Ptr", pIStream, "UInt", BSOS_DEFAULT, "Ptr", riid, "Ptr*", pIRandomAccessStream:=this.IBase(), "UInt")
+        , PICTDESC := Buffer(sz, 0)
+        , NumPut("uint", sz, "uint", PICTYPE_BITMAP, "ptr", IsInteger(hBitmap) ? hBitmap : hBitmap.ptr, PICTDESC)
+        , riid := this.CLSIDFromString(this.IID_IPicture)
+        , DllCall("OleAut32\OleCreatePictureIndirect", "Ptr", PICTDESC, "Ptr", riid, "UInt", 0, "Ptr*", pIPicture:=this.IBase(), "UInt")
+        , ComCall(15, pIPicture, "Ptr", pIStream, "UInt", true, "uint*", &size:=0, "UInt") ; IPicture::SaveAsFile
+        , riid := this.CLSIDFromString(this.IID_IRandomAccessStream)
+        , DllCall("ShCore\CreateRandomAccessStreamOverStream", "Ptr", pIStream, "UInt", BSOS_DEFAULT, "Ptr", riid, "Ptr*", pIRandomAccessStream:=this.IBase(), "UInt")
         Return pIRandomAccessStream
     }
 
@@ -866,7 +862,7 @@ class OCR {
     static CloseIClosable(pClosable) {
         static IClosable := "{30D5A829-7FA4-4026-83BB-D75BAE4EA99E}"
         Close := ComObjQuery(pClosable, IClosable)
-        ComCall(6, Close)   ; Close
+        , ComCall(6, Close)   ; Close
         if !IsObject(pClosable)
             ObjRelease(pClosable)
     }
