@@ -1,4 +1,5 @@
-﻿#include ..\Lib\OCR.ahk
+﻿#Requires AutoHotkey v2
+#include ..\Lib\OCR.ahk
 
 WinTitle := "ahk_exe notepad.exe"
 ; Run Notepad and fill with dummy text or activate a pre-existing window

@@ -1,4 +1,5 @@
-﻿#include ..\Lib\OCR.ahk
+﻿#Requires AutoHotkey v2
+#include ..\Lib\OCR.ahk
 
 Run "https://www.w3schools.com/tags/att_input_type_checkbox.asp"
 WinWaitActive "HTML input type",,10

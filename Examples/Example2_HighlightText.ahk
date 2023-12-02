@@ -1,3 +1,4 @@
+#Requires AutoHotkey v2
 #include ..\Lib\OCR.ahk
 
 Run "notepad.exe"

@@ -1,9 +1,10 @@
-﻿#include ..\Lib\OCR.ahk
+﻿#Requires AutoHotkey v2
+#include ..\Lib\OCR.ahk
 
 CoordMode "Mouse", "Screen"
 Loop {
     ib := InputBox("Insert RegEx search phrase to find all matches from Desktop: ", "OCR")
-    Sleep 100 ; Small delay to wait for the InputBox to close
+    Sleep 500 ; Small delay to wait for the InputBox to close
     if ib.Result != "OK"
         ExitApp
     result := OCR.FromDesktop(,2)

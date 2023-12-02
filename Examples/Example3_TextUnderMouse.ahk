@@ -1,4 +1,5 @@
-﻿#include ..\Lib\OCR.ahk
+﻿#Requires AutoHotkey v2
+#include ..\Lib\OCR.ahk
 
 CoordMode "Mouse", "Screen"
 CoordMode "ToolTip", "Screen"
