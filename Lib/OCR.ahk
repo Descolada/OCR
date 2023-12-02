@@ -457,7 +457,7 @@ class OCR {
         }
         result.DefineProp("Lines", {Value:croppedLines})
         result.DefineProp("Text", {Value:Trim(croppedText)})
-        result.DefineProp("Words", {Value:croppedWords})
+        result.DefineProp("Words", this.__OCR.Prototype.GetOwnPropDesc("Words"))
         return result
     }
 
