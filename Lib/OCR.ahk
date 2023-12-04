@@ -674,19 +674,14 @@ class OCR {
      * @returns {String} 
      */
     static GetAvailableLanguages() {
-        static GlobalizationPreferencesStatics := this.CreateClass("Windows.System.UserProfile.GlobalizationPreferences", IGlobalizationPreferencesStatics := "{01BF4326-ED37-4E96-B0E9-C1340D1EA158}")
-        ComCall(9, GlobalizationPreferencesStatics, "ptr*", &LanguageList:=0)   ; get_Languages
-        ComCall(7, LanguageList, "int*", &count:=0)   ; count
+        ComCall(7, this.OcrEngineStatics, "ptr*", &LanguageList := 0)   ; AvailableRecognizerLanguages
+        ComCall(7, LanguageList, "int*", &count := 0)   ; count
         Loop count {
-            ComCall(6, LanguageList, "int", A_Index-1, "ptr*", &hString:=0)   ; get_Item
-            ComCall(6, this.LanguageFactory, "ptr", hString, "ptr*", &LanguageTest:=0)   ; CreateLanguage
-            ComCall(8, this.OcrEngineStatics, "ptr", LanguageTest, "int*", &bool:=0)   ; IsLanguageSupported
-            if (bool = 1) {
-                ComCall(6, LanguageTest, "ptr*", &hText:=0)
-                buf := DllCall("Combase.dll\WindowsGetStringRawBuffer", "ptr", hText, "uint*", &length:=0, "ptr")
-                text .= StrGet(buf, "UTF-16") "`n"
-            }
-            ObjRelease(LanguageTest)
+            ComCall(6, LanguageList, "int", A_Index - 1, "ptr*", &Language := 0)   ; get_Item
+            ComCall(6, Language, "ptr*", &hText := 0)
+            buf := DllCall("Combase.dll\WindowsGetStringRawBuffer", "ptr", hText, "uint*", &length := 0, "ptr")
+            text .= StrGet(buf, "UTF-16") "`n"
+            ObjRelease(Language)
         }
         ObjRelease(LanguageList)
         return text
