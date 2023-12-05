@@ -681,6 +681,7 @@ class OCR {
             ComCall(6, Language, "ptr*", &hText := 0)
             buf := DllCall("Combase.dll\WindowsGetStringRawBuffer", "ptr", hText, "uint*", &length := 0, "ptr")
             text .= StrGet(buf, "UTF-16") "`n"
+            this.DeleteHString(hText)
             ObjRelease(Language)
         }
         ObjRelease(LanguageList)
