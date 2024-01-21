@@ -21,6 +21,16 @@
  *      Returns the bounding rectangle for multiple words
  * OCR.ClearAllHighlights()
  *      Removes all highlights created by Result.Highlight
+ * OCR.Cluster(objs, eps_x:=-1, eps_y:=-1, minPts:=1, compareFunc?)
+ *      Clusters objects (by default based on distance from eachother). Can be used to create more
+ *      accurate "Line" results.
+ * OCR.SortArray(arr, optionsOrCallback:="N", key?)
+ *      Sorts an array in-place, optionally by object keys or using a callback function.
+ * OCR.ReverseArray(arr)
+ *      Reverses an array in-place.
+ * OCR.UniqueArray(arr)
+ *      Returns an array with unique values.
+ * 
  * 
  * Properties:
  * OCR.MaxImageDimension
@@ -499,6 +509,22 @@ class OCR {
                 return words
             }
         }
+
+        BoundingRect {
+            get => this.DefineProp("BoundingRect", {Value:this.__OCR.WordsBoundingRect(this.Words*)}).BoundingRect
+        }
+        x {
+            get => this.BoundingRect.x
+        } 
+        y {
+            get => this.BoundingRect.y
+        }
+        w {
+            get => this.BoundingRect.w
+        }
+        h {
+            get => this.BoundingRect.h
+        }
     }
 
     class OCRWord {
@@ -748,6 +774,150 @@ class OCR {
                 return result
         }
         return
+    }
+
+    /**
+     * Returns word clusters using a two-dimensional DBSCAN algorithm
+     * @param objs An array of objects (Words, Lines etc) to cluster. Must have x, y, w, h and Text properties.
+     * @param eps_x Optional epsilon value for x-axis. Default is infinite.
+     * @param eps_y Optional epsilon value for y-axis. Default is median height of objects divided by two.
+     * @param minPts Optional minimum cluster size.
+     * @param compareFunc Optional comparison function to judge the minimum distance between objects
+     * to consider it a cluster. Must accept to objects to compare.
+     * Default comparison function determines whether the difference of middle y-coordinates of 
+     * the objects are less than epsilon-y, and whether objects are less than eps_x apart on the x-axis.
+     * @returns {Array} Array of objects with {x,y,w,h,Text,Words} properties
+     */
+    static Cluster(objs, eps_x:=-1, eps_y:=-1, minPts:=1, compareFunc?) {
+        local clusters := [], start := 0, cluster
+        visited := Map(), clustered := Map(), C := [], c_n := 0, sum := 0
+
+        if !IsSet(compareFunc)
+            compareFunc := (p1, p2) => Abs(p1.y+p1.h//2-p2.y-p2.h//2)<eps_y && (eps_x < 0 || (Abs(p1.x+p1.w-p2.x)<eps_x || Abs(p1.x-p2.x-p2.w)<eps_x))
+
+        if (eps_y < 0) {
+            for point in objs
+                sum += point.h
+            eps_y := (sum // objs.Length) // 2
+        }
+
+        ; DBSCAN adapted from https://github.com/ninopereira/DBSCAN_1D
+        for point in objs {
+            visited[point] := 1, neighbourPts := [], RegionQuery(point)
+            if !clustered.Has(point) {
+                C.Push([]), c_n += 1, C[c_n].Push(point), clustered[point] := 1
+                ExpandCluster(point)
+            }
+            if C[c_n].Length < minPts
+                C.RemoveAt(c_n), c_n--
+        }
+
+        ; Sort clusters by x-coordinate, get cluster bounding rects, and concatenate word texts
+        for cluster in C {
+            OCR.SortArray(cluster,,"x")
+            br := OCR.WordsBoundingRect(cluster*), br.Words := cluster, br.Text := ""
+            for word in cluster
+                br.Text .= word.Text " "
+            br.Text := RTrim(br.Text)
+            clusters.Push(br)
+        }
+        ; Sort clusters/lines by y-coordinate
+        OCR.SortArray(clusters,,"y")
+        return clusters
+
+        ExpandCluster(P) {
+            local point
+            for point in neighbourPts {
+                if !visited.Has(point) {
+                    visited[point] := 1, RegionQuery(point)
+                    if !clustered.Has(point)
+                        C[c_n].Push(point), clustered[point] := 1
+                }
+            }
+        }
+
+        RegionQuery(P) {
+            local point
+            for point in objs
+                if !visited.Has(point)
+                    if compareFunc(P, point)
+                        neighbourPts.Push(point)
+        }
+    }
+
+    /**
+     * Sorts an array in-place, optionally by object keys or using a callback function.
+     * @param arr The array to be sorted
+     * @param OptionsOrCallback Optional: either a callback function, or one of the following:
+     * 
+     *     N => array is considered to consist of only numeric values. This is the default option.
+     *     C, C1 or COn => case-sensitive sort of strings
+     *     C0 or COff => case-insensitive sort of strings
+     * 
+     *     The callback function should accept two parameters elem1 and elem2 and return an integer:
+     *     Return integer < 0 if elem1 less than elem2
+     *     Return 0 is elem1 is equal to elem2
+     *     Return > 0 if elem1 greater than elem2
+     * @param Key Optional: Omit it if you want to sort a array of primitive values (strings, numbers etc).
+     *     If you have an array of objects, specify here the key by which contents the object will be sorted.
+     * @returns {Array}
+     */
+    static SortArray(arr, optionsOrCallback:="N", key?) {
+        static sizeofFieldType := 16 ; Same on both 32-bit and 64-bit
+        if HasMethod(optionsOrCallback)
+            pCallback := CallbackCreate(CustomCompare.Bind(optionsOrCallback), "F Cdecl", 2), optionsOrCallback := ""
+        else {
+            if InStr(optionsOrCallback, "N")
+                pCallback := CallbackCreate(IsSet(key) ? NumericCompareKey.Bind(key) : NumericCompare, "F CDecl", 2)
+            if RegExMatch(optionsOrCallback, "i)C(?!0)|C1|COn")
+                pCallback := CallbackCreate(IsSet(key) ? StringCompareKey.Bind(key,,True) : StringCompare.Bind(,,True), "F CDecl", 2)
+            if RegExMatch(optionsOrCallback, "i)C0|COff")
+                pCallback := CallbackCreate(IsSet(key) ? StringCompareKey.Bind(key) : StringCompare, "F CDecl", 2)
+            if InStr(optionsOrCallback, "Random")
+                pCallback := CallbackCreate(RandomCompare, "F CDecl", 2)
+            if !IsSet(pCallback)
+                throw ValueError("No valid options provided!", -1)
+        }
+        mFields := NumGet(ObjPtr(arr) + (8 + (VerCompare(A_AhkVersion, "<2.1-") > 0 ? 3 : 5)*A_PtrSize), "Ptr") ; in v2.0: 0 is VTable. 2 is mBase, 3 is mFields, 4 is FlatVector, 5 is mLength and 6 is mCapacity
+        DllCall("msvcrt.dll\qsort", "Ptr", mFields, "UInt", arr.Length, "UInt", sizeofFieldType, "Ptr", pCallback, "Cdecl")
+        CallbackFree(pCallback)
+        if RegExMatch(optionsOrCallback, "i)R(?!a)")
+            this.ReverseArray(arr)
+        if InStr(optionsOrCallback, "U")
+            arr := this.Unique(arr)
+        return arr
+
+        CustomCompare(compareFunc, pFieldType1, pFieldType2) => (ValueFromFieldType(pFieldType1, &fieldValue1), ValueFromFieldType(pFieldType2, &fieldValue2), compareFunc(fieldValue1, fieldValue2))
+        NumericCompare(pFieldType1, pFieldType2) => (ValueFromFieldType(pFieldType1, &fieldValue1), ValueFromFieldType(pFieldType2, &fieldValue2), fieldValue1 - fieldValue2)
+        NumericCompareKey(key, pFieldType1, pFieldType2) => (ValueFromFieldType(pFieldType1, &fieldValue1), ValueFromFieldType(pFieldType2, &fieldValue2), fieldValue1.%key% - fieldValue2.%key%)
+        StringCompare(pFieldType1, pFieldType2, casesense := False) => (ValueFromFieldType(pFieldType1, &fieldValue1), ValueFromFieldType(pFieldType2, &fieldValue2), StrCompare(fieldValue1 "", fieldValue2 "", casesense))
+        StringCompareKey(key, pFieldType1, pFieldType2, casesense := False) => (ValueFromFieldType(pFieldType1, &fieldValue1), ValueFromFieldType(pFieldType2, &fieldValue2), StrCompare(fieldValue1.%key% "", fieldValue2.%key% "", casesense))
+        RandomCompare(pFieldType1, pFieldType2) => (Random(0, 1) ? 1 : -1)
+
+        ValueFromFieldType(pFieldType, &fieldValue?) {
+            static SYM_STRING := 0, PURE_INTEGER := 1, PURE_FLOAT := 2, SYM_MISSING := 3, SYM_OBJECT := 5
+            switch SymbolType := NumGet(pFieldType + 8, "Int") {
+                case PURE_INTEGER: fieldValue := NumGet(pFieldType, "Int64") 
+                case PURE_FLOAT: fieldValue := NumGet(pFieldType, "Double") 
+                case SYM_STRING: fieldValue := StrGet(NumGet(pFieldType, "Ptr")+2*A_PtrSize)
+                case SYM_OBJECT: fieldValue := ObjFromPtrAddRef(NumGet(pFieldType, "Ptr")) 
+                case SYM_MISSING: return		
+            }
+        }
+    }
+    ; Reverses the array in-place
+    static ReverseArray(arr) {
+        local len := arr.Length + 1, max := (len // 2), i := 0
+        while ++i <= max
+            temp := arr[len - i], arr[len - i] := arr[i], arr[i] := temp
+        return arr
+    }
+    ; Returns a new array with only unique values
+    static UniqueArray(arr) {
+        unique := Map()
+        for v in arr
+            unique[v] := 1
+        return [unique*]
     }
 
     ;; Only internal methods ahead
