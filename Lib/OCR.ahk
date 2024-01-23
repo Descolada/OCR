@@ -791,6 +791,12 @@ class OCR {
     static Cluster(objs, eps_x:=-1, eps_y:=-1, minPts:=1, compareFunc?) {
         local clusters := [], start := 0, cluster
         visited := Map(), clustered := Map(), C := [], c_n := 0, sum := 0
+        if !IsObject(objs) || !(objs is Array)
+            throw ValueError("objs argument must be an Array", -1)
+        if IsSet(compareFunc) && !HasMethod(compareFunc)
+            throw ValueError("compareFunc must be a valid function", -1)
+        if !objs.Length
+            return
 
         if !IsSet(compareFunc)
             compareFunc := (p1, p2) => Abs(p1.y+p1.h//2-p2.y-p2.h//2)<eps_y && (eps_x < 0 || (Abs(p1.x+p1.w-p2.x)<eps_x || Abs(p1.x-p2.x-p2.w)<eps_x))
