@@ -21,7 +21,7 @@
  *      Returns the bounding rectangle for multiple words
  * OCR.ClearAllHighlights()
  *      Removes all highlights created by Result.Highlight
- * OCR.Cluster(objs, eps_x:=-1, eps_y:=-1, minPts:=1, compareFunc?)
+ * OCR.Cluster(objs, eps_x:=-1, eps_y:=-1, minPts:=1, compareFunc?, &noise?)
  *      Clusters objects (by default based on distance from eachother). Can be used to create more
  *      accurate "Line" results.
  * OCR.SortArray(arr, optionsOrCallback:="N", key?)
@@ -30,6 +30,8 @@
  *      Reverses an array in-place.
  * OCR.UniqueArray(arr)
  *      Returns an array with unique values.
+ * OCR.FlattenArray(arr)
+ *      Returns a one-dimensional array from a multi-dimensional array
  * 
  * 
  * Properties:
@@ -786,11 +788,12 @@ class OCR {
      * to consider it a cluster. Must accept to objects to compare.
      * Default comparison function determines whether the difference of middle y-coordinates of 
      * the objects are less than epsilon-y, and whether objects are less than eps_x apart on the x-axis.
+     * @param noise If provided, then will be set to an array of clusters that didn't satisfy minPts
      * @returns {Array} Array of objects with {x,y,w,h,Text,Words} properties
      */
-    static Cluster(objs, eps_x:=-1, eps_y:=-1, minPts:=1, compareFunc?) {
+    static Cluster(objs, eps_x:=-1, eps_y:=-1, minPts:=1, compareFunc?, &noise?) {
         local clusters := [], start := 0, cluster
-        visited := Map(), clustered := Map(), C := [], c_n := 0, sum := 0
+        visited := Map(), clustered := Map(), C := [], c_n := 0, sum := 0, noise := IsSet(noise) && (noise is Array) ? noise : []
         if !IsObject(objs) || !(objs is Array)
             throw ValueError("objs argument must be an Array", -1)
         if IsSet(compareFunc) && !HasMethod(compareFunc)
@@ -815,7 +818,7 @@ class OCR {
                 ExpandCluster(point)
             }
             if C[c_n].Length < minPts
-                C.RemoveAt(c_n), c_n--
+                noise.Push(C[c_n]), C.RemoveAt(c_n), c_n--
         }
 
         ; Sort clusters by x-coordinate, get cluster bounding rects, and concatenate word texts
@@ -920,10 +923,22 @@ class OCR {
     }
     ; Returns a new array with only unique values
     static UniqueArray(arr) {
-        unique := Map()
+        local unique := Map()
         for v in arr
             unique[v] := 1
         return [unique*]
+    }
+
+    ; Returns a one-dimensional array from a multi-dimensional array
+    static FlattenArray(arr) {
+        local r := []
+        for v in arr {
+            if v is Array
+                r.Push(this.FlattenArray(v)*)
+            else
+                r.Push(v)
+        }
+        return r
     }
 
     ;; Only internal methods ahead
