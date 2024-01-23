@@ -796,7 +796,7 @@ class OCR {
         if IsSet(compareFunc) && !HasMethod(compareFunc)
             throw ValueError("compareFunc must be a valid function", -1)
         if !objs.Length
-            return
+            return []
 
         if !IsSet(compareFunc)
             compareFunc := (p1, p2) => Abs(p1.y+p1.h//2-p2.y-p2.h//2)<eps_y && (eps_x < 0 || (Abs(p1.x+p1.w-p2.x)<eps_x || Abs(p1.x-p2.x-p2.w)<eps_x))
