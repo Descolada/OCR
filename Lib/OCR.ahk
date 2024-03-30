@@ -182,7 +182,7 @@ class OCR {
     ; Returns all Word objects for the result. Equivalent to looping over all the Lines and getting the Words.
     Words {
         get {
-            local words := [], line
+            local words := [], line, word
             for line in this.Lines
                 for word in line.Words
                     words.Push(word)
@@ -353,7 +353,7 @@ class OCR {
      * @returns {Object} 
      */
     FindString(needle, i:=1, casesense:=False, wordCompareFunc?, searchArea?) {
-        local line, counter, found, x1, y1, x2, y2, splitNeedle, result
+        local line, counter, found, x1, y1, x2, y2, splitNeedle, result, word
         if !(needle is String)
             throw TypeError("Needle is required to be a string, not type " Type(needle), -1)
         if needle == ""
@@ -405,7 +405,7 @@ class OCR {
      * @returns {Array} 
      */
     FindStrings(needle, casesense:=False, wordCompareFunc?, searchArea?) {
-        local line, counter, found, x1, y1, x2, y2, splitNeedle, result
+        local line, counter, found, x1, y1, x2, y2, splitNeedle, result, word
         if !(needle is String)
             throw TypeError("Needle is required to be a string, not type " Type(needle), -1)
         if needle == ""
@@ -452,7 +452,7 @@ class OCR {
     Filter(callback) {
         if !HasMethod(callback)
             throw ValueError("Filter callback must be a function", -1)
-        local result := this.Clone(), line, croppedLines := [], croppedText := "", croppedWords := [], lineText := ""
+        local result := this.Clone(), line, croppedLines := [], croppedText := "", croppedWords := [], lineText := "", word
         ObjAddRef(result.ptr)
         for line in result.Lines {
             croppedWords := [], lineText := ""
@@ -792,7 +792,7 @@ class OCR {
      * @returns {Array} Array of objects with {x,y,w,h,Text,Words} properties
      */
     static Cluster(objs, eps_x:=-1, eps_y:=-1, minPts:=1, compareFunc?, &noise?) {
-        local clusters := [], start := 0, cluster
+        local clusters := [], start := 0, cluster, word
         visited := Map(), clustered := Map(), C := [], c_n := 0, sum := 0, noise := IsSet(noise) && (noise is Array) ? noise : []
         if !IsObject(objs) || !(objs is Array)
             throw ValueError("objs argument must be an Array", -1)
