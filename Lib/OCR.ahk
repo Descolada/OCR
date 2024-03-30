@@ -199,10 +199,10 @@ class OCR {
      * otherwise the Relative objects Window.xy/Client.xy properties values will be added to the x and y coordinates as offsets.
      */
     Click(Obj, WhichButton?, ClickCount?, DownOrUp?) {
-        if !obj.HasOwnProp("x") && InStr(Type(obj), "OCR")
+        if !obj.HasProp("x") && InStr(Type(obj), "OCR")
             obj := this.__OCR.WordsBoundingRect(obj.Words)
         local x := obj.x, y := obj.y, w := obj.w, h := obj.h, mode := "Screen", hwnd
-        if this.HasOwnProp("Relative") {
+        if this.HasProp("Relative") {
             if this.Relative.HasOwnProp("Window")
                 mode := "Window", hwnd := this.Relative.Window.Hwnd
             else if this.Relative.HasOwnProp("Client")
@@ -222,19 +222,22 @@ class OCR {
     /**
      * ControlClicks an object
      * @param obj The object to click, which can be a OCR result object, Line, Word, or Object {x,y,w,h}
-     * If this object (the one Click is called from) contains a "Relative" property (this is
-     * added by default with OCR.FromWindow) containing a Hwnd property, then that window will be activated,
-     * otherwise the Relative properties values will be added to the x and y coordinates as offsets.
+     * If the result object originates from OCR.FromWindow which captured only the client area,
+     * then the result object will contain correct coordinates for the ControlClick. 
+     * If OCR.FromWindow captured the Window area, then the Relative property
+     * will contain Window property, and those coordinates will be adjusted to Client area.
+     * Otherwise, if additionally a WinTitle is provided then the coordinates are treated as Screen 
+     * coordinates and converted to Client coordinates.
      * @param WinTitle If WinTitle is set, then the coordinates stored in Obj will be converted to
      * client coordinates and ControlClicked.
      */
     ControlClick(obj, WinTitle?, WinText?, WhichButton?, ClickCount?, Options?, ExcludeTitle?, ExcludeText?) {
-        if !obj.HasOwnProp("x") && InStr(Type(obj), "OCR")
+        if !obj.HasProp("x") && InStr(Type(obj), "OCR")
             obj := this.__OCR.WordsBoundingRect(obj.Words)
         local x := obj.x, y := obj.y, w := obj.w, h := obj.h, hWnd
-        if this.HasOwnProp("Relative") && (this.Relative.HasOwnProp("Client") || this.Relative.HasOwnProp("Window")) {
+        if this.HasProp("Relative") && (this.Relative.HasOwnProp("Client") || this.Relative.HasOwnProp("Window")) {
             mode := this.Relative.HasOwnProp("Client") ? "Client" : "Window"
-            , obj := this.Relative.%mode%, x := obj.x, y := obj.y, hWnd := obj.hWnd
+            , obj := this.Relative.%mode%, x += obj.x, y += obj.y, hWnd := obj.hWnd
             if mode = "Window" {
                 ; Window -> Client
                 RECT := Buffer(16, 0), pt := Buffer(8, 0)
@@ -316,7 +319,7 @@ class OCR {
         else 
             rect := obj
         x := rect.x, y := rect.y, w := rect.w, h := rect.h
-        if this.HasOwnProp("Relative") && this.Relative.HasOwnProp("Screen")
+        if this.HasProp("Relative") && this.Relative.HasOwnProp("Screen")
             x += this.Relative.Screen.X, y += this.Relative.Screen.Y
 
         if !ResultGuis.Has(obj) {
