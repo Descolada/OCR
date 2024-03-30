@@ -734,7 +734,7 @@ class OCR {
             , ComCall(9, this.OcrEngineStatics, "ptr", Language, "ptr*", OcrEngine:=this.IBase())   ; TryCreateFromLanguage
         }
         if (OcrEngine.ptr = 0)
-            Throw Error("Can not use language `"" lang "`" for OCR, please install language pack.")
+            Throw Error(lang = "FirstFromAvailableLanguages" ? "Failed to use FirstFromAvailableLanguages for OCR:`nmake sure the primary language pack has OCR capabilities installed.`n`nAlternatively try `"en-us`" as the language." : "Can not use language `"" lang "`" for OCR, please install language pack.")
         this.OcrEngine := OcrEngine, this.CurrentLanguage := lang
     }
 
