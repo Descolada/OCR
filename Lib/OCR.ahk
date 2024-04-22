@@ -785,12 +785,18 @@ class OCR {
      * Returns word clusters using a two-dimensional DBSCAN algorithm
      * @param objs An array of objects (Words, Lines etc) to cluster. Must have x, y, w, h and Text properties.
      * @param eps_x Optional epsilon value for x-axis. Default is infinite.
+     * This is unused if compareFunc is provided.
      * @param eps_y Optional epsilon value for y-axis. Default is median height of objects divided by two.
+     * This is unused if compareFunc is provided.
      * @param minPts Optional minimum cluster size.
      * @param compareFunc Optional comparison function to judge the minimum distance between objects
-     * to consider it a cluster. Must accept to objects to compare.
+     * to consider it a cluster. Must accept two objects to compare.
      * Default comparison function determines whether the difference of middle y-coordinates of 
      * the objects are less than epsilon-y, and whether objects are less than eps_x apart on the x-axis.
+     * 
+     * Eg `(p1, p2) => ((Abs(p1.y+p1.h-p2.y) < 5 || Abs(p2.y+p2.h-p1.y) < 5) && ((p1.x >= p2.x && p1.x <= (p2.x+p2.w)) || ((p1.x+p1.w) >= p2.x && (p1.x+p1.w) <= (p2.x+p2.w))))`
+     * will cluster objects if they are located on top of eachother on the x-axis, and less than 5 pixels
+     * apart in the y-axis.
      * @param noise If provided, then will be set to an array of clusters that didn't satisfy minPts
      * @returns {Array} Array of objects with {x,y,w,h,Text,Words} properties
      */
@@ -799,18 +805,18 @@ class OCR {
         visited := Map(), clustered := Map(), C := [], c_n := 0, sum := 0, noise := IsSet(noise) && (noise is Array) ? noise : []
         if !IsObject(objs) || !(objs is Array)
             throw ValueError("objs argument must be an Array", -1)
-        if IsSet(compareFunc) && !HasMethod(compareFunc)
-            throw ValueError("compareFunc must be a valid function", -1)
         if !objs.Length
             return []
+        if IsSet(compareFunc) && !HasMethod(compareFunc)
+            throw ValueError("compareFunc must be a valid function", -1)
 
-        if !IsSet(compareFunc)
+        if !IsSet(compareFunc) {
+            if (eps_y < 0) {
+                for point in objs
+                    sum += point.h
+                eps_y := (sum // objs.Length) // 2
+            }
             compareFunc := (p1, p2) => Abs(p1.y+p1.h//2-p2.y-p2.h//2)<eps_y && (eps_x < 0 || (Abs(p1.x+p1.w-p2.x)<eps_x || Abs(p1.x-p2.x-p2.w)<eps_x))
-
-        if (eps_y < 0) {
-            for point in objs
-                sum += point.h
-            eps_y := (sum // objs.Length) // 2
         }
 
         ; DBSCAN adapted from https://github.com/ninopereira/DBSCAN_1D
@@ -969,7 +975,7 @@ class OCR {
                 hbm := this.CreateDIBSection(W, H)
                 , hdc := DllCall("CreateCompatibleDC", "Ptr", 0, "UPtr")
                 , obm := DllCall("SelectObject", "Ptr", HDC, "Ptr", HBM)
-                , DllCall("PrintWindow", "uint", hwnd, "uint", hdc, "uint", 2|!!flagOnlyClientArea)
+                , DllCall("PrintWindow", "ptr", hwnd, "ptr", hdc, "uint", 2|!!flagOnlyClientArea)
                 if scale != 1 {
                     PDC := DllCall("CreateCompatibleDC", "Ptr", HDC, "UPtr")
                     , hbm2 := DllCall("CreateCompatibleBitmap", "Ptr", HDC, "Int", sW, "Int", sH, "UPtr")
