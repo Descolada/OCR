@@ -10,7 +10,7 @@
  * OCR.FromRect(X, Y, W, H, lang?, scale:=1)
  * OCR.FromWindow(WinTitle?, lang?, scale:=1, onlyClientArea:=0, mode:=2)
  * OCR.FromFile(FileName, lang?)
- * OCR.FromBitmap(HBitmap, lang?)
+ * OCR.FromBitmap(bitmap, lang?, scale:=1)
  * 
  * Additional methods:
  * OCR.GetAvailableLanguages()
@@ -103,6 +103,8 @@ class OCR {
         this.OcrEngineStatics := this.CreateClass("Windows.Media.Ocr.OcrEngine", IOcrEngineStatics := "{5BFFA85A-3384-3540-9940-699120D428A8}")
         ComCall(6, this.OcrEngineStatics, "uint*", &MaxImageDimension:=0)   ; MaxImageDimension
         this.MaxImageDimension := MaxImageDimension
+        DllCall("Dwmapi\DwmIsCompositionEnabled", "Int*", &compositionEnabled:=0)
+        this.CAPTUREBLT := compositionEnabled ? 0 : 0x40000000
     }
 
     /**
@@ -692,13 +694,46 @@ class OCR {
     }
 
     /**
-     * Returns an OCR results object from a hBitmap object. Locations of the words will be relative
+     * Returns an OCR results object from a bitmap. Locations of the words will be relative
      * to the top left corner of the bitmap.
-     * @param hBitmap An hBitmap pointer or an object with a ptr property
+     * @param bitmap A pointer to a GDIP Bitmap object, or HBITMAP, or an object with a ptr property
+     *  set to one of the two.
      * @param lang OCR language. Default is first from available languages.
      * @returns {ocr} 
      */
-    static FromBitmap(hBitmap, lang?) => this(this.HBitmapToRandomAccessStream(hBitmap), lang?)
+    static FromBitmap(bitmap, lang?, scale:=1) {
+        local result, pDC, hBitmap, hBM2, oBM, oBM2, pBitmapInfo := Buffer(32, 0)
+
+        if !DllCall("GetObject", "ptr", bitmap, "int", pBitmapInfo.Size, "ptr", pBitmapInfo) {
+            DllCall("gdiplus\GdipCreateHBITMAPFromBitmap", "UPtr", bitmap, "UPtr*", &hBitmap:=0, "Int", 0xffffffff)
+            DllCall("GetObject", "ptr", hBitmap, "int", pBitmapInfo.Size, "ptr", pBitmapInfo)
+        } else
+            hBitmap := bitmap
+
+        W := NumGet(pBitmapInfo, 4, "int"), H := NumGet(pBitmapInfo, 8, "int")
+
+        if scale != 1 || (W && H && (W < 40 || H < 40)) {
+            sW := Integer(W * scale), sH := Integer(H * scale)
+
+            hDC := DllCall("CreateCompatibleDC", "Ptr", 0, "UPtr")
+            oBM := DllCall("SelectObject", "Ptr", hDC, "Ptr", hBitmap)
+            pDC := DllCall("CreateCompatibleDC", "Ptr", hDC, "UPtr")
+            hBM2 := DllCall("CreateCompatibleBitmap", "Ptr", hDC, "Int", Max(40, sW), "Int", Max(40, sH), "UPtr")
+            oBM2 := DllCall("SelectObject", "Ptr", pDC, "Ptr", hBM2)
+            if sW < 40 || sH < 40 ; Fills the bitmap so it's at least 40x40, which seems to improve recognition
+                DllCall("StretchBlt", "Ptr", pDC, "Int", 0, "Int", 0, "Int", Max(40,sW), "Int", Max(40,sH), "Ptr", hDC, "Int", 0, "Int", 0, "Int", 1, "Int", 1, "UInt", 0x00CC0020 | this.CAPTUREBLT) ; SRCCOPY. 
+            DllCall("StretchBlt", "Ptr", pDC, "Int", 0, "Int", 0, "Int", sW, "Int", sH, "Ptr", hDC, "Int", 0, "Int", 0, "Int", W, "Int", H, "UInt", 0x00CC0020 | this.CAPTUREBLT) ; SRCCOPY
+            DllCall("SelectObject", "Ptr", pDC, "Ptr", oBM2)
+            DllCall("SelectObject", "Ptr", hDC, "Ptr", oBM)
+            DllCall("DeleteDC", "Ptr", pDC)
+            DllCall("DeleteDC", "Ptr", hDC)
+            result := this(this.HBitmapToRandomAccessStream(hBM2), lang?)
+            this.NormalizeCoordinates(result, scale)
+            DllCall("DeleteObject", "UPtr", hBM2)
+            return result
+        } 
+        return this(this.HBitmapToRandomAccessStream(hBitmap), lang?)
+    } 
 
     /**
      * Returns all available languages as a string, where the languages are separated by newlines.
@@ -963,7 +998,6 @@ class OCR {
     }
 
     static CreateBitmap(X, Y, W, H, hWnd := 0, scale:=1, onlyClientArea:=0, mode:=2) {
-        static CAPTUREBLT := InitCaptureBlt()
         local sW := W*scale, sH := H*scale, flagOnlyClientArea, HDC, obm, hbm, pdc, hbm2, sW, sH
         if hWnd {
             X := 0, Y := 0, flagOnlyClientArea := onlyClientArea
@@ -979,12 +1013,14 @@ class OCR {
                 if scale != 1 {
                     PDC := DllCall("CreateCompatibleDC", "Ptr", HDC, "UPtr")
                     , hbm2 := DllCall("CreateCompatibleBitmap", "Ptr", HDC, "Int", sW, "Int", sH, "UPtr")
-                    , DllCall("SelectObject", "Ptr", PDC, "Ptr", HBM2)
-                    , DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", sW, "Int", sH, "Ptr", HDC, "Int", X, "Int", Y, "Int", W, "Int", H, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY
+                    , obm2 := DllCall("SelectObject", "Ptr", PDC, "Ptr", HBM2)
+                    , DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", sW, "Int", sH, "Ptr", HDC, "Int", X, "Int", Y, "Int", W, "Int", H, "UInt", 0x00CC0020 | this.CAPTUREBLT) ; SRCCOPY
+                    , DllCall("SelectObject", "Ptr", PDC, "Ptr", obm2)
                     , DllCall("DeleteDC", "Ptr", PDC)
                     , DllCall("DeleteObject", "UPtr", HBM)
                     , hbm := hbm2
                 }
+                DllCall("SelectObject", "Ptr", HDC, "Ptr", obm)
                 DllCall("DeleteDC", "Ptr", HDC)
                 return this.IBase(HBM).DefineProp("__Delete", {call:(*)=>DllCall("DeleteObject", "UPtr", HBM)})
             }
@@ -993,18 +1029,14 @@ class OCR {
         }
         HBM := DllCall("CreateCompatibleBitmap", "Ptr", HDC, "Int", Max(40,sW), "Int", Max(40,sH), "UPtr")
         , PDC := DllCall("CreateCompatibleDC", "Ptr", HDC, "UPtr")
-        , DllCall("SelectObject", "Ptr", PDC, "Ptr", HBM)
+        , OBM := DllCall("SelectObject", "Ptr", PDC, "Ptr", HBM)
         if sW < 40 || sH < 40 ; Fills the bitmap so it's at least 40x40, which seems to improve recognition
-            DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", Max(40,sW), "Int", Max(40,sH), "Ptr", HDC, "Int", X, "Int", Y, "Int", 1, "Int", 1, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY. 
-        DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", sW, "Int", sH, "Ptr", HDC, "Int", X, "Int", Y, "Int", W, "Int", H, "UInt", 0x00CC0020 | CAPTUREBLT) ; SRCCOPY
+            DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", Max(40,sW), "Int", Max(40,sH), "Ptr", HDC, "Int", X, "Int", Y, "Int", 1, "Int", 1, "UInt", 0x00CC0020 | this.CAPTUREBLT) ; SRCCOPY. 
+        DllCall("StretchBlt", "Ptr", PDC, "Int", 0, "Int", 0, "Int", sW, "Int", sH, "Ptr", HDC, "Int", X, "Int", Y, "Int", W, "Int", H, "UInt", 0x00CC0020 | this.CAPTUREBLT) ; SRCCOPY
+        , DllCall("SelectObject", "Ptr", PDC, "Ptr", OBM)
         , DllCall("DeleteDC", "Ptr", PDC)
         , DllCall("ReleaseDC", "Ptr", 0, "Ptr", HDC)
         return this.IBase(HBM).DefineProp("__Delete", {call:(*)=>DllCall("DeleteObject", "UPtr", HBM)})
-
-        InitCaptureBlt() {
-            DllCall("Dwmapi\DwmIsCompositionEnabled", "Int*", &compositionEnabled:=0)
-            return compositionEnabled ? 0 : 0x40000000
-        }
     }
 
     static HBitmapToRandomAccessStream(hBitmap) {
