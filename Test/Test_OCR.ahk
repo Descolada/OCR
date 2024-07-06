@@ -19,7 +19,8 @@ class OCRTestSuite {
         Run "notepad.exe"
         WinWaitActive "ahk_exe notepad.exe"
         WinMove(0,0,1530,876)
-        ControlSetText("Lorem ipsum", "Edit1")
+        ControlSetText("Lorem ipsum ", "Edit1")
+        ControlSend("{End}", "Edit1")
     }
     End() {
         WinClose "ahk_exe notepad.exe"
@@ -74,5 +75,10 @@ class OCRTestSuite {
 
         DUnit.Assert(InStr(result.Text, "Lorem ipsum") '"Lorem ipsum" missing')
         DUnit.Assert(OCRTestSuite.__CompDiff(OCRTestSuite.__FindWord(result), {h:15, w:58, x:22, y:82}, 8), "Got " DUnit.Print(OCRTestSuite.__FindWord(result)))
+    }
+    Test_Filter() {
+        result := OCR.FromWindow("A")
+        DUnit.Equal(result.Filter((word) => word.Text = "Lorem").Text, "Lorem")
+        DUnit.Assert(!InStr(result.Crop(500, 500, 1000, 1000).Text, "Lorem"))
     }
 }
