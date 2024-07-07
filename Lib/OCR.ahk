@@ -5,7 +5,7 @@
  * Based on the UWP OCR function for AHK v1 by malcev.
  * 
  * Ways of initiating OCR:
- * OCR(IRandomAccessStream, lang?)
+ * OCR(RandomAccessStreamOrSoftwareBitmap, lang:="FirstFromAvailableLanguages", decoder?)
  * OCR.FromDesktop(lang?, scale:=1)
  * OCR.FromRect(X, Y, W, H, lang?, scale:=1)
  * OCR.FromWindow(WinTitle?, lang?, scale:=1, onlyClientArea:=0, mode:=2)
@@ -82,6 +82,7 @@ class OCR {
     static IID_IRandomAccessStream := "{905A0FE1-BC53-11DF-8C49-001E4FC686DA}"
          , IID_IPicture            := "{7BF80980-BF32-101A-8BBB-00AA00300CAB}"
          , IID_IAsyncInfo          := "{00000036-0000-0000-C000-000000000046}"
+         , Vtbl_GetDecoder := {bmp:6, jpg:7, jpeg:7, png:8, tiff:9, gif:10, jpegxr:11, ico:12}
 
     class IBase {
         __New(ptr?) {
@@ -110,14 +111,31 @@ class OCR {
     /**
      * Returns an OCR results object for an IRandomAccessStream.
      * Images of other types should be first converted to this format (eg from file, from bitmap).
-     * @param pIRandomAccessStream Pointer or an object containing a ptr to the stream
+     * @param RandomAccessStreamOrSoftwareBitmap Pointer or an object containing a ptr to a RandomAccessStream or SoftwareBitmap
      * @param {String} lang OCR language. Default is first from available languages.
+     * @param {String} decoder Optional bitmap codec name to decode RandomAccessStream. Default is automatic detection.
+     *  Possible values are gif, ico, jpeg, jpegxr, png, tiff, bmp.
      * @returns {Ocr} 
      */
-    __New(pIRandomAccessStream?, lang := "FirstFromAvailableLanguages") {
-        if IsSet(lang) || !this.__OCR.HasOwnProp("CurrentLanguage")
-            this.__OCR.LoadLanguage(lang?)
-        ComCall(14, this.__OCR.BitmapDecoderStatics, "ptr", pIRandomAccessStream, "ptr*", BitmapDecoder:=this.__OCR.IBase())   ; CreateAsync
+    __New(RandomAccessStreamOrSoftwareBitmap?, lang := "FirstFromAvailableLanguages", decoder := "") {
+        local SoftwareBitmap := 0, RandomAccessStream := 0
+        this.__OCR.LoadLanguage(lang)
+
+        try SoftwareBitmap := ComObjQuery(RandomAccessStreamOrSoftwareBitmap, "{689e0708-7eef-483f-963f-da938818e073}") ; ISoftwareBitmap
+        if SoftwareBitmap {
+            ComCall(8, SoftwareBitmap, "uint*", &width:=0)   ; get_PixelWidth
+            ComCall(9, SoftwareBitmap, "uint*", &height:=0)   ; get_PixelHeight
+            if (width > this.__OCR.MaxImageDimension) or (height > this.__OCR.MaxImageDimension)
+               throw ValueError("Image is too big - " width "x" height ".`nIt should be maximum - " this.__OCR.MaxImageDimension " pixels")
+            goto RecognizeAsync
+        }
+        RandomAccessStream := RandomAccessStreamOrSoftwareBitmap
+
+        if decoder {
+            ComCall(this.__OCR.Vtbl_GetDecoder.%decoder%, this.__OCR.BitmapDecoderStatics, "ptr", DecoderGUID:=Buffer(16))
+            ComCall(15, this.__OCR.BitmapDecoderStatics, "ptr", DecoderGUID, "ptr", RandomAccessStream, "ptr*", BitmapDecoder:=this.__OCR.IBase())   ; CreateAsync
+        } else
+            ComCall(14, this.__OCR.BitmapDecoderStatics, "ptr", RandomAccessStream, "ptr*", BitmapDecoder:=this.__OCR.IBase())   ; CreateAsync
         this.__OCR.WaitForAsync(&BitmapDecoder)
         BitmapFrame := ComObjQuery(BitmapDecoder, IBitmapFrame := "{72A49A1C-8081-438D-91BC-94ECFC8185C6}")
         ComCall(12, BitmapFrame, "uint*", &width:=0)   ; get_PixelWidth
@@ -139,12 +157,15 @@ class OCR {
         }
         this.__OCR.WaitForAsync(&SoftwareBitmap)
 
+        RecognizeAsync:
         ComCall(6, this.__OCR.OcrEngine, "ptr", SoftwareBitmap, "ptr*", OcrResult:=this.__OCR.IBase())   ; RecognizeAsync
         this.__OCR.WaitForAsync(&OcrResult)
 
         ; Cleanup
-        this.__OCR.CloseIClosable(pIRandomAccessStream)
-        this.__OCR.CloseIClosable(SoftwareBitmap)
+        if RandomAccessStream is this.__OCR.IBase
+            this.__OCR.CloseIClosable(RandomAccessStream)
+        if SoftwareBitmap is this.__OCR.IBase
+            this.__OCR.CloseIClosable(SoftwareBitmap)
 
         this.ptr := OcrResult.ptr, ObjAddRef(OcrResult.ptr)
     }
@@ -587,11 +608,11 @@ class OCR {
     static FromFile(FileName, lang?) {
         if (SubStr(FileName, 2, 1) != ":")
             FileName := A_ScriptDir "\" FileName
-         if !FileExist(FileName) or InStr(FileExist(FileName), "D")
+         if !(fe := FileExist(FileName)) or InStr(fe, "D")
             throw TargetError("File `"" FileName "`" doesn't exist", -1)
          GUID := this.CLSIDFromString(this.IID_IRandomAccessStream)
          DllCall("ShCore\CreateRandomAccessStreamOnFile", "wstr", FileName, "uint", Read := 0, "ptr", GUID, "ptr*", IRandomAccessStream:=this.IBase())
-         return this(IRandomAccessStream, lang?)
+         return this(IRandomAccessStream, lang?, this.Vtbl_GetDecoder.HasOwnProp(ext := StrSplit(FileName, ".")[-1]) ? ext : "")
     }
 
     /**
@@ -1123,8 +1144,6 @@ class OCR {
         static IClosable := "{30D5A829-7FA4-4026-83BB-D75BAE4EA99E}"
         local Close := ComObjQuery(pClosable, IClosable)
         ComCall(6, Close)   ; Close
-        if !IsObject(pClosable)
-            ObjRelease(pClosable)
     }
 
     static CLSIDFromString(IID) {
