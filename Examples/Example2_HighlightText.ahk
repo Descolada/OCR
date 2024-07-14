@@ -9,7 +9,7 @@ Sleep 40
 result := OCR.FromWindow("A",,2)
 try found := result.FindString("Lorem")
 if !IsSet(found) {
-    MsgBox '"ipsum" was not found in Notepad!'
+    MsgBox '"Lorem" was not found in Notepad!'
     ExitApp
 }
 
