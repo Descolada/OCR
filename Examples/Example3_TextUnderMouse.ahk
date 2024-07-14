@@ -5,6 +5,7 @@ CoordMode "Mouse", "Screen"
 CoordMode "ToolTip", "Screen"
 
 DllCall("SetThreadDpiAwarenessContext", "ptr", -3) ; Needed for multi-monitor setups with differing DPIs
+; OCR.PerformanceMode := 1 ; Uncommenting this makes the OCR more performant, but also more CPU-heavy
 
 global w := 150, h := 50, minsize := 5, step := 3
 Loop {
