@@ -1,6 +1,8 @@
 #Requires AutoHotkey v2.0 
 #include ..\Lib\OCR.ahk
 
+MsgBox "Press Win+C and take a screenshot which to OCR"
+
 #c::{
     static ScreenSnipperProcessName := "ScreenClippingHost.exe"
     SavedClip := ClipboardAll()
@@ -29,7 +31,7 @@
     text := rearrangeOCRresult(result)
 
     A_Clipboard := text
-    Tooltip "Clipboard set to OCR result:`n" text
+    Tooltip "Clipboard set to formatted OCR result:`n" text
     SetTimer () => Tooltip(), -7000
 }
 
@@ -52,6 +54,7 @@ rearrangeOCRresult(result, diff:=0) {
       txt - (internal) to store lines/words.
       bb1 - (internal) below bottom 1, to approx. correct base bottom line of the text (add more characters if needed).
       bb2 - (internal) below bottom 2, to assess correction factor (add more characters if needed).*/
+      local arr, hm, txt, wr, ht, vt, hd, vd, ds, aInd, lw, bb2, oy, arr, i, j, k, l, ii, oy
       loop (arr:=Map(), hm:=0, txt:="", wr:= 0, ht:= 2, vt:= 1, hd:= 2, vd:= 3, ds:= .75, diff:= 0, 2) {
           for lw in (aInd:= A_Index, bb1:= "[,;gjpqyQ]", bb2:= "[A-Z0-9%bdfhkltij]", wr? result.words: result.lines) {
                if (lb:= wr? lw: OCR.WordsBoundingRect(lw.Words*), aInd=1 && !diff) {
@@ -70,10 +73,10 @@ rearrangeOCRresult(result, diff:=0) {
               gp.= ch
           Return gp
       }
-      for i, j in , (text:="", oy:=0, arr) {
+      for i, j in (text:="", oy:=0, arr) {
           for k, l in (vp:= (ii:=i-oy)>vd*diff? mf(Round(ii/vd/diff), "`n", vt): "", text.= vp, oi:= i, ok:= 0, j)
               sp:= (kk:=k-ok)>hd*diff? mf(Round(kk/hd/diff), "`s", ht): "", text.= sp l[5] " ", ok:= k+l[3], oy:= l[2]
-          text.= "`n"
+          text .= "`n"
       }
       return text
   }
