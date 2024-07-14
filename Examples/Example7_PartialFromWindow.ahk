@@ -17,7 +17,7 @@ if !(hWnd := WinExist(WinTitle)) {
 WinMoveBottom(hWnd)
 Sleep 60
 
-WinGetPos(&X, &Y, &W, &H, hWnd)
+WinGetClientPos(&X, &Y, &W, &H, hWnd)
 
 ; OCR only the top left quarter of the client area
 result := OCR.FromWindow(hWnd,, 2, {X:0, Y:0, W:W//2, H:H//2, onlyClientArea:1})
