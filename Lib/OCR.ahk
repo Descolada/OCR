@@ -818,7 +818,7 @@ class OCR {
      * @param transform Either a scale factor number, or an object {scale:Integer, grayscale:Boolean, invertcolors:Boolean}
      * @returns {OCR.OcrResult} 
      */
-    static FromRect(x, y, w, h, lang?, transform:=1) {
+    static FromRect(x, y?, w?, h?, lang?, transform:=1) {
         this.__ExtractTransformParameters(x, &transform)
         this.__ExtractNamedParameters(x, "y", &y, "w", &w, "h", &h, "lang", &lang, "x", &x)
         local scale := transform.scale
