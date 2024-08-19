@@ -123,9 +123,46 @@ class OCR {
         this.MaxImageDimension := MaxImageDimension
         DllCall("Dwmapi\DwmIsCompositionEnabled", "Int*", &compositionEnabled:=0)
         this.CAPTUREBLT := compositionEnabled ? 0 : 0x40000000
+        /*  // Based on code by AHK forums user Xtra
+            unsigned int Convert_GrayScale(unsigned int bitmap[], unsigned int w, unsigned int h, unsigned int Stride)
+            {
+                unsigned int a, r, g, b, gray, ARGB;
+                unsigned int x, y, offset = Stride/4;
+                for (y = 0; y < h; ++y) {
+                    for (x = 0; x < w; ++x) {
+                        ARGB = bitmap[x+(y*offset)];
+                        a = ARGB & 0xFF000000;
+                        r = (ARGB & 0x00FF0000) >> 16;
+                        g = (ARGB & 0x0000FF00) >> 8;
+                        b = (ARGB & 0x000000FF);
+                        gray = ((300 * r) + (590 * g) + (110 * b)) >> 10;
+                        bitmap[x+(y*offset)] = (gray << 16) | (gray << 8) | gray | a;
+                    }
+                }
+                return 0;
+            }
+         */
         this.GrayScaleMCode := this.MCode((A_PtrSize = 4) 
         ? "2,x86:VVdWU4PsCIt0JCiLVCQki0QkIMHuAok0JIXSD4SDAAAAhcB0f408tQAAAAAx9ol8JASLfCQcjRyHMf+NdCYAkItEJByNDLiNtCYAAAAAZpCLEYPBBInQD7buwegQae1OAgAAD7bAacAsAQAAAegPtuqB4gAAAP9r7W4B6MHoConFCcLB4AjB5RAJ6gnQiUH8Odl1vIPGAQM8JANcJAQ5dCQkdZyDxAgxwFteX13D" 
         : "2,x64:QVZVV1ZTRInOSYnLQYnSRYnGwe4CRYXAdHJFMclFMcCF0nRoDx9AAESJyg8fRAAAidCDwgFJjQyDizmJ+In7wegQD7bvD7bAae1OAgAAacAsAQAAAehAD7bvgecAAAD/a+1uAejB6AqJxQnHweAIweUQCe8Jx4k5RDnSdbNBg8ABQQHxQQHyRTnGdZwxwFteX11BXsM=")
+        /*
+            unsigned int Invert_Colors(unsigned int bitmap[], unsigned int w, unsigned int h, unsigned int Stride)
+            {
+                unsigned int a, r, g, b, gray, ARGB;
+                unsigned int x, y, offset = Stride/4;
+                for (y = 0; y < h; ++y) {
+                    for (x = 0; x < w; ++x) {
+                        ARGB = bitmap[x+(y*offset)];
+                        a = ARGB & 0xFF000000;
+                        r = (ARGB & 0x00FF0000) >> 16;
+                        g = (ARGB & 0x0000FF00) >> 8;
+                        b = (ARGB & 0x000000FF);
+                        bitmap[x+(y*offset)] = ((255-r) << 16) | ((255-g) << 8) | (255-b) | a;
+                    }
+                }
+                return 0;
+            }
+        */
         this.InvertColorsMCode := this.MCode((A_PtrSize = 4)
         ? "2,x86:VVdWU4PsCIt8JCiLVCQki0QkIMHvAok8JIXSdF+FwHRbwecCMe2JfCQEi3wkHI00hzH/jXQmAJCLRCQcjQyokIsRg8EEidCJ04Hi/wAA//fQ99OA8v8lAAD/AIHjAP8AAAnYCdCJQfw58XXUg8cBAywkA3QkBDl8JCR1vIPECDHAW15fXcM="
         : "2,x64:VVdWU0SJz0iJy0GJ00SJxsHvAkWFwHRbRTHJRTHAhdJ0UWYPH0QAAESJyQ8fRAAAiciDwQFMjRSDQYsSidCJ1YHi/wAA//fQ99WA8v8lAAD/AIHlAP8AAAnoCdBBiQJBOct1zEGDwAFBAflBAftEOcZ1tTHAW15fXcM=")
@@ -711,6 +748,9 @@ class OCR {
         this.__ExtractTransformParameters(WinTitle, &transform)
         local result, X := 0, Y := 0, W := 0, H := 0, sX, sY, hBitMap, hwnd, customRect := 0, scale := transform.scale
         this.__ExtractNamedParameters(WinTitle, "x", &x, "y", &y, "w", &w, "h", &h, "onlyClientArea", &onlyClientArea, "mode", &mode, "lang", &lang, "WinTitle", &Wintitle)
+        this.__ExtractNamedParameters(onlyClientArea, "x", &x, "y", &y, "w", &w, "h", &h, "onlyClientArea", &onlyClientArea)
+        if (x !=0 || y != 0 || w != 0 || h != 0)
+            customRect := 1
         if IsObject(WinTitle)
             WinTitle := ""
         if !(hWnd := WinExist(WinTitle))
@@ -722,13 +762,6 @@ class OCR {
             WinSetTransparent(255, hwnd)
             While (WinGetTransparent(hwnd) != 255 && ++i < 30)
                 Sleep 100
-        }
-        if IsObject(onlyClientArea) { ; Extract coordinates relative to window, required to calculate offsets for final screen coordinates
-            for p in ["x", "y", "w", "h"]
-                if onlyClientArea.HasOwnProp(p)
-                    %p% := onlyClientArea.%p%
-            onlyClientArea := onlyClientArea.HasOwnProp("onlyClientArea") ? onlyClientArea.onlyClientArea : 0
-            customRect := 1
         }
 
         WinGetPos(&wX, &wY, &wW, &wH, hWnd)
@@ -943,14 +976,16 @@ class OCR {
      * @returns {OCR.OcrResult} 
      */
     static WaitText(needle, timeout:=-1, func?, casesense:=False, comparefunc?) {
-        local endTime := A_TickCount+timeout, result
+        local endTime := A_TickCount+timeout, result, line, total
         if !IsSet(func)
             func := this.FromDesktop
         if !IsSet(comparefunc)
             comparefunc := InStr.Bind(,,casesense)
         While timeout > 0 ? (A_TickCount < endTime) : 1 {
-            result := func()
-            if comparefunc(result.Text, needle)
+            result := func(), total := ""
+            for line in result.Lines
+                total .= line.Text "`n"
+            if comparefunc(Trim(total, "`n"), needle)
                 return result
         }
         return
