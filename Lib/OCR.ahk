@@ -255,6 +255,7 @@ class OCR {
 
         ComCall(6, __OCR.OcrEngine, "ptr", SoftwareBitmap, "ptr*", OcrResult:=ComValue(13,0))   ; RecognizeAsync
         __OCR.WaitForAsync(&OcrResult)
+        this.ptr := OcrResult.ptr, ObjAddRef(OcrResult.ptr)
 
         ; Cleanup
         if RandomAccessStream is __OCR.IBase
@@ -264,8 +265,6 @@ class OCR {
 
         if scale != 1
             __OCR.NormalizeCoordinates(this, scale)
-
-        this.ptr := OcrResult.ptr, ObjAddRef(OcrResult.ptr)
     }
 
     __Delete() => this.ptr ? ObjRelease(this.ptr) : 0
