@@ -11,6 +11,8 @@
  * OCR.FromWindow(WinTitle?, lang?, transform:=1, onlyClientArea:=0, mode:=4)
  * OCR.FromFile(FileName, lang?, transform:=1)
  * OCR.FromBitmap(bitmap, lang?, transform:=1, hDC?)
+ * OCR.FromPDF(FileName, lang?, transform:=1)   => returns an array of results for each PDF page
+ * OCR.FromPDFPage(FileName, page:=1, lang?, transform:=1)
  * 
  * Note: the first parameter of the OCR initiation methods may be an object mimicking named parameters.
  * Eg. OCR.FromDesktop({lang:"en-us", grayscale:1})
@@ -94,6 +96,7 @@ class OCR {
          , IID_IAsyncOperationCompletedHandler_OcrResult        := "{989c1371-444a-5e7e-b197-9eaaf9d2829a}"
          , IID_IAsyncOperationCompletedHandler_SoftwareBitmap   := "{b699b653-33ed-5e2d-a75f-02bf90e32619}"
          , IID_IAsyncOperationCompletedHandler_BitmapDecoder    := "{bb6514f2-3cfb-566f-82bc-60aabd302d53}"
+         , IID_IPdfDocumentStatics := "{433A0B5F-C007-4788-90F2-08143D922599}"
          , Vtbl_GetDecoder := {bmp:6, jpg:7, jpeg:7, png:8, tiff:9, gif:10, jpegxr:11, ico:12}
          , PerformanceMode := 0
          , DisplayImage := 0
@@ -705,7 +708,7 @@ class OCR {
     /**
      * Returns an OCR results object for an image file. Locations of the words will be relative to
      * the top left corner of the image.
-     * @param FileName Either full or relative (to A_ScriptDir) path to the file.
+     * @param FileName Either full or relative (to A_WorkingDir) path to the file.
      * @param lang OCR language. Default is first from available languages.
      * @param transform Either a scale factor number, or an object {scale:Integer, grayscale:Boolean, invertcolors:Boolean}
      * @returns {OCR.OcrResult} 
@@ -713,13 +716,71 @@ class OCR {
     static FromFile(FileName, lang?, transform:=1) {
         this.__ExtractTransformParameters(FileName, &transform)
         this.__ExtractNamedParameters(FileName, "lang", &lang, "scale", &scale, "FileName", &FileName)
-        if (SubStr(FileName, 2, 1) != ":")
-            FileName := A_ScriptDir "\" FileName
-         if !(fe := FileExist(FileName)) or InStr(fe, "D")
+        if !(fe := FileExist(FileName)) or InStr(fe, "D")
             throw TargetError("File `"" FileName "`" doesn't exist", -1)
-         GUID := this.CLSIDFromString(this.IID_IRandomAccessStream)
-         DllCall("ShCore\CreateRandomAccessStreamOnFile", "wstr", FileName, "uint", Read := 0, "ptr", GUID, "ptr*", IRandomAccessStream:=this.IBase())
-         return this(IRandomAccessStream, lang?, transform, this.Vtbl_GetDecoder.HasOwnProp(ext := StrSplit(FileName, ".")[-1]) ? ext : "")
+        GUID := this.CLSIDFromString(this.IID_IRandomAccessStream)
+        DllCall("ShCore\CreateRandomAccessStreamOnFile", "wstr", FileName, "uint", Read := 0, "ptr", GUID, "ptr*", IRandomAccessStream:=this.IBase())
+        return this(IRandomAccessStream, lang?, transform, this.Vtbl_GetDecoder.HasOwnProp(ext := StrSplit(FileName, ".")[-1]) ? ext : "")
+    }
+
+    /**
+     * Returns an array of OCR results objects for a PDF file. Locations of the words will be relative to
+     * the top left corner of the PDF page.
+     * @param FileName Either full or relative (to A_WorkingDir) path to the file.
+     * @param lang OCR language. Default is first from available languages.
+     * @param transform Either a scale factor number, or an object {scale:Integer, grayscale:Boolean, invertcolors:Boolean}
+     * @returns {OCR.OcrResult} 
+     */
+    static FromPDF(FileName, lang?, transform:=1) {
+        this.__ExtractTransformParameters(FileName, &transform)
+        this.__ExtractNamedParameters(FileName, "lang", &lang, "scale", &scale, "FileName", &FileName)
+        if !(fe := FileExist(FileName)) or InStr(fe, "D")
+            throw TargetError("File `"" FileName "`" doesn't exist", -1)
+
+        DllCall("ShCore\CreateRandomAccessStreamOnFile", "wstr", FileName, "uint", Read := 0, "ptr", GUID := this.CLSIDFromString(this.IID_IRandomAccessStream), "ptr*", IRandomAccessStream:=ComValue(13,0))
+        PdfDocumentStatics := this.CreateClass("Windows.Data.Pdf.PdfDocument", this.IID_IPdfDocumentStatics) ; If this line is removed then the script throws an error for a second on script exist
+        ComCall(8, PdfDocumentStatics, "ptr", IRandomAccessStream, "ptr*", PdfDocument:=this.IBase()) ; LoadFromStreamAsync
+        this.WaitForAsync(&PdfDocument)
+        this.CloseIClosable(IRandomAccessStream)
+        ComCall(7, PdfDocument, "uint*", &count:=0) ; GetPageCount
+        if !count
+            throw Error("Unable to get PDF page count", -1)
+        results := []
+        Loop count
+            results.Push(this.FromPDFPage(PdfDocument, A_Index, lang?, transform:=1))
+        return results
+    }
+
+    /**
+     * Returns an OCR result object for a PDF page. Locations of the words will be relative to
+     * the top left corner of the PDF page.
+     * @param FileName Either full or relative (to A_WorkingDir) path to the file.
+     * @param Page The page number to OCR. Default is 1.
+     * @param lang OCR language. Default is first from available languages.
+     * @param transform Either a scale factor number, or an object {scale:Integer, grayscale:Boolean, invertcolors:Boolean}
+     * @returns {OCR.OcrResult} 
+     */
+    static FromPDFPage(FileName, page:=1, lang?, transform:=1) {
+        this.__ExtractTransformParameters(FileName, &transform)
+        this.__ExtractNamedParameters(FileName, "page", page, "lang", &lang, "scale", &scale, "FileName", &FileName)
+        if FileName is String {
+            if !(fe := FileExist(FileName)) or InStr(fe, "D")
+                throw TargetError("File `"" FileName "`" doesn't exist", -1)
+            GUID := OCR.CLSIDFromString(OCR.IID_IRandomAccessStream)
+            DllCall("ShCore\CreateRandomAccessStreamOnFile", "wstr", FileName, "uint", Read := 0, "ptr", GUID, "ptr*", IRandomAccessStream:=OCR.IBase())
+            PdfDocumentStatics := this.CreateClass("Windows.Data.Pdf.PdfDocument", this.IID_IPdfDocumentStatics)
+            ComCall(8, PdfDocumentStatics, "ptr", IRandomAccessStream, "ptr*", PdfDocument:=this.IBase()) ; LoadFromStreamAsync
+            this.WaitForAsync(&PdfDocument)
+        } else
+            PdfDocument := FileName
+        ComCall(6, PdfDocument, "uint", page-1, "ptr*", PdfPage:=this.IBase()) ; GetPage
+        InMemoryRandomAccessStream := this.CreateClass("Windows.Storage.Streams.InMemoryRandomAccessStream")
+        ComCall(6, PdfPage, "ptr", InMemoryRandomAccessStream, "ptr*", asyncInfo:=this.IBase())   ; RenderToStreamAsync
+        this.WaitForAsync(&asyncInfo)
+        if FileName is String
+            this.CloseIClosable(IRandomAccessStream)
+        PdfPage := "", PdfDocument := "", IRandomAccessStream := ""
+        return this(InMemoryRandomAccessStream, lang?, transform)    
     }
 
     /**
