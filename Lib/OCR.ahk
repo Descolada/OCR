@@ -507,7 +507,7 @@ class OCR {
                     If IsSet(searchArea) && (word.x < x1 || word.y < y1 || word.x+word.w > x2 || word.y+word.h > y2)
                         continue
                     t := word.Text, len := StrLen(t)
-                    if wordCompareFunc(splitNeedle[found.Length+1], t) {
+                    if wordCompareFunc(t, splitNeedle[found.Length+1]) {
                         found.Push(word)
                         if found.Length == needleLen {
                             if ++counter == i {
