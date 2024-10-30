@@ -11,13 +11,16 @@ global w := 150, h := 50, minsize := 5, step := 3
 Loop {
     MouseGetPos(&x, &y)
     Highlight(x-w//2, y-h//2, w, h)
-    ToolTip(OCR.FromRect(x-w//2, y-h//2, w, h,,2).Text, , y+h//2+10)
+    ToolTip(g_CurrentText := OCR.FromRect(x-w//2, y-h//2, w, h,,2).Text, , y+h//2+10)
 }
 
 Right::global w+=step
 Left::global w-=(w < minsize ? 0 : step)
 Up::global h+=step
 Down::global h-=(h < minsize ? 0 : step)
+
+; Ctrl+Shift+c to copy the current OCR text to clipboard
+^+c::A_Clipboard := g_CurrentText, ToolTip("OCR text copied to clipboard!"), Sleep(2000), ToolTip()
 
 Highlight(x?, y?, w?, h?, showTime:=0, color:="Red", d:=2) {
 	static guis := []
