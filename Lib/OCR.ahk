@@ -11,7 +11,7 @@
  * OCR.FromWindow(WinTitle?, lang?, transform:=1, onlyClientArea:=0, mode:=4)
  * OCR.FromFile(FileName, lang?, transform:=1)
  * OCR.FromBitmap(bitmap, lang?, transform:=1, hDC?)
- * OCR.FromPDF(FileName, lang?, transform:=1)   => returns an array of results for each PDF page
+ * OCR.FromPDF(FileName, lang?, transform:=1, start:=1, end?)   => returns an array of results for each PDF page
  * OCR.FromPDFPage(FileName, page:=1, lang?, transform:=1)
  * 
  * Note: the first parameter of the OCR initiation methods may be an object mimicking named parameters.
@@ -729,11 +729,13 @@ class OCR {
      * @param FileName Either full or relative (to A_WorkingDir) path to the file.
      * @param lang OCR language. Default is first from available languages.
      * @param transform Either a scale factor number, or an object {scale:Float, grayscale:Boolean, invertcolors:Boolean, rotate: 0 | 90 | 180 | 270, flip: 0 | "x" | "y"}
+     * @param start Page number to start from. Default is first page.
+     * @param end Page number to end with (included). Default is last page.
      * @returns {OCR.OcrResult} 
      */
-    static FromPDF(FileName, lang?, transform:=1) {
+    static FromPDF(FileName, lang?, transform:=1, start:=1, end?) {
         this.__ExtractTransformParameters(FileName, &transform)
-        this.__ExtractNamedParameters(FileName, "lang", &lang, "FileName", &FileName)
+        this.__ExtractNamedParameters(FileName, "lang", &lang, "start", &start, "end", &end, "FileName", &FileName)
         if !(fe := FileExist(FileName)) or InStr(fe, "D")
             throw TargetError("File `"" FileName "`" doesn't exist", -1)
 
@@ -742,12 +744,14 @@ class OCR {
         ComCall(8, PdfDocumentStatics, "ptr", IRandomAccessStream, "ptr*", PdfDocument:=this.IBase()) ; LoadFromStreamAsync
         this.WaitForAsync(&PdfDocument)
         this.CloseIClosable(IRandomAccessStream)
-        ComCall(7, PdfDocument, "uint*", &count:=0) ; GetPageCount
-        if !count
-            throw Error("Unable to get PDF page count", -1)
-        results := []
-        Loop count
-            results.Push(this.FromPDFPage(PdfDocument, A_Index, lang?, transform))
+        if !IsSet(end) {
+            ComCall(7, PdfDocument, "uint*", &end:=0) ; GetPageCount
+            if !end
+                throw Error("Unable to get PDF page count", -1)
+        }
+        local results := []
+        Loop (end+1-start)
+            results.Push(this.FromPDFPage(PdfDocument, start+(A_Index-1), lang?, transform))
         return results
     }
 
