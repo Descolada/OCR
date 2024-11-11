@@ -715,7 +715,7 @@ class OCR {
      */
     static FromFile(FileName, lang?, transform:=1) {
         this.__ExtractTransformParameters(FileName, &transform)
-        this.__ExtractNamedParameters(FileName, "lang", &lang, "scale", &scale, "FileName", &FileName)
+        this.__ExtractNamedParameters(FileName, "lang", &lang, "FileName", &FileName)
         if !(fe := FileExist(FileName)) or InStr(fe, "D")
             throw TargetError("File `"" FileName "`" doesn't exist", -1)
         GUID := this.CLSIDFromString(this.IID_IRandomAccessStream)
@@ -733,7 +733,7 @@ class OCR {
      */
     static FromPDF(FileName, lang?, transform:=1) {
         this.__ExtractTransformParameters(FileName, &transform)
-        this.__ExtractNamedParameters(FileName, "lang", &lang, "scale", &scale, "FileName", &FileName)
+        this.__ExtractNamedParameters(FileName, "lang", &lang, "FileName", &FileName)
         if !(fe := FileExist(FileName)) or InStr(fe, "D")
             throw TargetError("File `"" FileName "`" doesn't exist", -1)
 
@@ -747,7 +747,7 @@ class OCR {
             throw Error("Unable to get PDF page count", -1)
         results := []
         Loop count
-            results.Push(this.FromPDFPage(PdfDocument, A_Index, lang?, transform:=1))
+            results.Push(this.FromPDFPage(PdfDocument, A_Index, lang?, transform))
         return results
     }
 
@@ -762,7 +762,7 @@ class OCR {
      */
     static FromPDFPage(FileName, page:=1, lang?, transform:=1) {
         this.__ExtractTransformParameters(FileName, &transform)
-        this.__ExtractNamedParameters(FileName, "page", page, "lang", &lang, "scale", &scale, "FileName", &FileName)
+        this.__ExtractNamedParameters(FileName, "page", page, "lang", &lang, "FileName", &FileName)
         if FileName is String {
             if !(fe := FileExist(FileName)) or InStr(fe, "D")
                 throw TargetError("File `"" FileName "`" doesn't exist", -1)
@@ -1237,14 +1237,17 @@ class OCR {
 
         BitmapTransform := this.CreateClass("Windows.Graphics.Imaging.BitmapTransform")
 
-        sW := Floor(sbW*scale), sH := Floor(sbH*scale) 
+        local sW := Floor(sbW*scale), sH := Floor(sbH*scale), intermediate
         if scale != 1 {
             ; First the bitmap is scaled, then cropped
             ComCall(7, BitmapTransform, "uint", sW) ; put_ScaledWidth
             ComCall(9, BitmapTransform, "uint", sH) ; put_ScaledHeight
         }
-        if rotate
+        if rotate {
             ComCall(15, BitmapTransform, "uint", rotate//90) ; put_Rotation
+            if rotate = 90 || rotate = 270
+                intermediate := sW, sW := sH, sH := intermediate
+        }
         if flip
             ComCall(13, BitmapTransform, "uint", flip) ; put_Flip
 
@@ -1564,8 +1567,7 @@ class OCR {
             for prop in ["scale", "grayscale", "invertcolors", "rotate", "flip"]
                 if !transform.HasProp(prop)
                     transform.%prop% := %prop%
-        }
-        else
+        } else
             transform := {scale:scale, grayscale:grayscale, invertcolors:invertcolors, rotate:rotate, flip:flip}
     
         transform.flip := transform.flip = "y" ? 1 : transform.flip = "x" ? 2 : transform.flip
