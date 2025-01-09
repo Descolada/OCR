@@ -11,7 +11,7 @@ global w := 150, h := 50, minsize := 5, step := 3
 Loop {
     MouseGetPos(&x, &y)
     Highlight(x-w//2, y-h//2, w, h)
-    ToolTip(g_CurrentText := OCR.FromRect(x-w//2, y-h//2, w, h,,2).Text, , y+h//2+10)
+    ToolTip(g_CurrentText := OCR.FromRect(x-w//2, y-h//2, w, h, {scale:2}).Text, , y+h//2+10)
 }
 
 Right::global w+=step

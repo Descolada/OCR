@@ -27,7 +27,7 @@ MsgBox "Press Win+C and take a screenshot which to OCR"
     hBitmap := DllCall("User32.dll\CopyImage", "UPtr", hData, "UInt", 0, "Int", 0, "Int", 0, "UInt", 0x2000, "Ptr")
     DllCall("CloseClipboard")
 
-    result := OCR.FromBitmap(hBitmap,, 2)
+    result := OCR.FromBitmap(hBitmap, {scale:2})
     text := rearrangeOCRresult(result)
 
     A_Clipboard := text

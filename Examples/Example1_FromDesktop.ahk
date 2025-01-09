@@ -6,4 +6,4 @@ MsgBox "All text from desktop: `n" result.Text
 
 MsgBox "Press OK to highlight all found lines for 3 seconds."
 for line in result.Lines
-    result.Highlight(line, -3000)
+    line.Highlight(-3000)

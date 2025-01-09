@@ -5,5 +5,5 @@ SetTitleMatchMode 2
 result := OCR.FromDesktop()
 cluster := OCR.Cluster(result.Words)
 for res in cluster
-    result.Highlight(res, -5000)
+    res.Highlight(-5000)
 Sleep 5000

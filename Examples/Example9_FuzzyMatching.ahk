@@ -8,10 +8,10 @@
 ; The following example attempts to find words that are less than 3 changes away from "AutoHtokey".
 ; The search is case-sensitive by default.
 
-result := OCR.FromDesktop(, 2)
+result := OCR.FromDesktop(, {scale:2})
 for word in result.Words {
     if LD(word.Text, "AutoHtokey") < 3
-        result.Highlight(word)
+        word.Highlight()
 }
 
 ; Credit: iPhilip, Source: https://www.autohotkey.com/boards/viewtopic.php?style=17&p=509167#p509167

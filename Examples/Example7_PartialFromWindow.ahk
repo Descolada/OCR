@@ -20,17 +20,17 @@ Sleep 60
 WinGetClientPos(&X, &Y, &W, &H, hWnd)
 
 ; OCR only the top left quarter of the client area
-result := OCR.FromWindow(hWnd,, 2, {X:0, Y:0, W:W//2, H:H//2, onlyClientArea:1})
+result := OCR.FromWindow(hWnd, {scale:2, X:0, Y:0, W:W//2, H:H//2, onlyClientArea:1})
 MsgBox "Found in client area X:0 Y:0 W:" W//2 " H:" H//2 ":`n" result.Text
 for line in result.Lines ; Highlight all lines for 2 seconds
-    result.Highlight(line, -2000)
+    line.Highlight(-2000)
 Sleep 2000
 
 ; OCR only the bottom right quarter of the client area
-result := OCR.FromWindow(hWnd,, 2, {X:W//2, Y:H//2, W:W, H:H, onlyClientArea:1})
-MsgBox "Found in client area X:" W//2 " Y:" H//2 " W:" W " H:" H ":`n" result.Text
+result := OCR.FromWindow(hWnd, {scale:2, X:W//2, Y:H//2, W:W//2, H:H//2, onlyClientArea:1})
+MsgBox "Found in client area X:" W//2 " Y:" H//2 " W:" W//2 " H:" H//2 ":`n" result.Text
 for line in result.Lines ; Highlight all lines for 2 seconds
-    result.Highlight(line, -2000)
+    line.Highlight(-2000)
 Sleep 2000
 
 ExitApp

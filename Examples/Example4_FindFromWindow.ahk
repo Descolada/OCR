@@ -7,7 +7,7 @@ Loop {
     Sleep 100 ; Small delay to wait for the InputBox to close
     if ib.Result != "OK"
         ExitApp
-    result := OCR.FromWindow("A",,2)
+    result := OCR.FromWindow("A", {scale:2})
     try found := result.FindString(ib.Value)
     catch {
         MsgBox 'Phrase "' ib.Value '" not found!'
@@ -15,6 +15,6 @@ Loop {
     }
     ; MouseMove is set to CoordMode Window, so no coordinate conversion necessary
     MouseMove found.x, found.y
-    result.Highlight(found)
+    found.Highlight()
     break
 }

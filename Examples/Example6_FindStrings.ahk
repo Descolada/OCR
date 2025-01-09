@@ -16,7 +16,7 @@ Loop {
     for match in found {
         ; MouseMove is set to CoordMode Screen, so no coordinate conversion necessary
         MouseMove match.x, match.y
-        result.Highlight(match)
+        match.Highlight()
     } 
     break
 }
