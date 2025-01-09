@@ -1,3 +1,10 @@
+# NOTICE
+January 2025 version 2 (alpha stage) of this library was published, which introduces multiple breaking changes. Major differences include:
+1. Options common to the different OCR functions (such as `scale`, `lang` etc) are now gathered under the `Options` argument
+2. OCR.Result objects now contain common methods to all result types (Result, Line, Word, etc) such as `Result.Highlight` and `Result.Click`
+
+Since v2 is still in alpha stage, breaking changes are still allowed. If you have any suggestions about the syntax or feature requests, please open an Issue here in GitHub.
+
 # OCR
 UWP OCR for AHK v2:
 A wrapper for the the UWP Windows.Media.Ocr library. 
@@ -13,12 +20,33 @@ OCR library: a wrapper for the the UWP Windows.Media.Ocr library.
 Based on the UWP OCR function for AHK v1 by malcev.
 
 Ways of initiating OCR:
-OCR(RandomAccessStreamOrSoftwareBitmap, lang:="FirstFromAvailableLanguages", decoder?)
-OCR.FromDesktop(lang?, scale:=1)
-OCR.FromRect(X, Y, W, H, lang?, scale:=1)
-OCR.FromWindow(WinTitle?, lang?, scale:=1, onlyClientArea:=0, mode:=2)
-OCR.FromFile(FileName, lang?)
-OCR.FromBitmap(HBitmap, lang?, scale:=1)
+OCR(RandomAccessStreamOrSoftwareBitmap, Options?)
+OCR.FromDesktop(Options?, Monitor?)
+OCR.FromRect(X, Y, W, H, Options?)
+OCR.FromWindow(WinTitle:="", Options?, WinText:="", ExcludeTitle:="", ExcludeText:="")
+OCR.FromFile(FileName, Options?)
+OCR.FromBitmap(bitmap, Options?, hDC?)
+OCR.FromPDF(FileName, Options?, Start:=1, End?, Password:="") => returns an array of results for each PDF page
+OCR.FromPDFPage(FileName, page, Options?)
+  Helper functions for PDF OCR:
+     OCR.GetPdfPageCount(FileName, Password:="")
+     OCR.GetPdfPageProperties(FileName, Page, Password:="")
+
+Options can be an object containing none or all of these elements:
+{
+     lang: OCR language. Default is first from available languages.
+     scale: a Float scale factor to zoom the image in or out, which might improve detection. 
+            The resulting coordinates will be adjusted to scale. Default is 1.
+     grayscale: Boolean 0 | 1 whether to convert the image to black-and-white. Default is 0.
+     invertcolors: Boolean 0 | 1, whether to invert the colors of the image. Default is 0.
+     rotate: 0 | 90 | 180 | 270, can be used to rotate the image clock-wise by degrees. Default is 0.
+     flip: 0 | "x" | "y", can be used to flip the image on the x- or y-axis. Default is 0.
+     x, y, w, h: can be used to crop the image. This is applied before scaling. Default is no cropping.
+     decoder: gif | ico | jpeg | jpegxr | png | tiff | bmp. Optional bitmap codec name to decode RandomAccessStream. Default is automatic detection. 
+}
+
+Note: Options also accepts any optional parameters after it like named parameters.
+Eg. OCR.FromDesktop({lang:"en-us", monitor:2})
 
 Additional methods:
 OCR.GetAvailableLanguages()
@@ -44,15 +72,16 @@ OCR.FlattenArray(arr)
 Properties:
 OCR.MaxImageDimension
 MinImageDimension is not documented, but appears to be 40 pixels (source: user FanaticGuru in AutoHotkey forums)
-OCR.MaximumPerformance
-     Increases speed of OCR acquisition by about 20-50ms, but also increases CPU usage. Default is 0 (off). 
+OCR.PerformanceMode
+     Increases speed of OCR acquisition by about 20-50ms if set to 1, but also increases CPU usage. Default is 0.
+OCR.DisplayImage
+     If set to True then the captured image is displayed on the screen before proceeding to OCR-ing the image.
 
-
-OCR returns an OCR results object:
+OCR returns an OCR.Result object:
 Result.Text         => All recognized text
 Result.TextAngle    => Clockwise rotation of the recognized text 
-Result.Lines        => Array of all Line objects
-Result.Words        => Array of all Word objects
+Result.Lines        => Array of all OCR.Line objects
+Result.Words        => Array of all OCR.Word objects
 Result.ImageWidth   => Used image width
 Result.ImageHeight  => Used image height
 
@@ -60,29 +89,32 @@ Result.FindString(needle, i:=1, casesense:=False, wordCompareFunc?, searchArea?)
      Finds a string in the result
 Result.FindStrings(needle, casesense:=False, wordCompareFunc?, searchArea?)
      Finds all strings in the result
-Result.Click(Obj, WhichButton?, ClickCount?, DownOrUp?)
-     Clicks an object (Word, FindString result etc)
-Result.ControlClick(obj, WinTitle?, WinText?, WhichButton?, ClickCount?, Options?, ExcludeTitle?, ExcludeText?)
-     ControlClicks an object (Word, FindString result etc)
-Result.Highlight(obj?, showTime?, color:="Red", d:=2)
-     Highlights a Word, Line, or object with {x,y,w,h} properties on the screen (default: 2 seconds), or removes the highlighting
 Result.Filter(callback)
      Returns a filtered result object that contains only words that satisfy the callback function
 Result.Crop(x1, y1, x2, y2)
-     Crops the result object to contain only results from an area defined by points (x1,y1) and (x2,y2).
+     Crops the result object to contain only results from an area defined by points (x1,y1) and (x2,y2). 
 
-
-Line object:
+OCR.Line object:
 Line.Text         => Recognized text of the line
 Line.Words        => Array of Word objects for the Line
+Line.x,y,w,h      => Size and location of the Line. 
 
-Word object:
-Line.Text         => Recognized text of the word
-Line.x,y,w,h      => Size and location of the Word. Coordinates are relative to the original image.
-Line.BoundingRect => Bounding rectangle of the Word in format {x,y,w,h}. Coordinates are relative to the original image.
+OCR.Word object:
+Word.Text         => Recognized text of the word
+Word.x,y,w,h      => Size and location of the Word. 
+Word.BoundingRect => Bounding rectangle of the Word in format {x,y,w,h}. 
+
+OCR.Result, OCR.Line, and OCR.Word also all have some common methods:
+
+Result.Click(WhichButton?, ClickCount?, DownOrUp?)
+     Clicks an object (Word, FindString result etc)
+Result.ControlClick(WinTitle?, WinText?, WhichButton?, ClickCount?, Options?, ExcludeTitle?, ExcludeText?)
+     ControlClicks an object (Word, FindString result etc)
+Result.Highlight(showTime?, color:="Red", d:=2)
+     Highlights a Word, Line, or object with {x,y,w,h} properties on the screen (default: 2 seconds), or removes the highlighting
 
 Additional notes:
-Languages are recognized in BCP-47 language tags. Eg. OCR.FromFile("myfile.bmp", "en-AU")
+Languages are recognized in BCP-47 language tags. Eg. OCR.FromFile("myfile.bmp", {lang: "en-AU"})
 Languages can be installed for example with PowerShell (run as admin): Install-Language <language-tag>
      or from Language settings in Settings.
 Not all language packs support OCR though. A list of supported language can be gotten from 
