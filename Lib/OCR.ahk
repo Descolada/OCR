@@ -1336,7 +1336,7 @@ class OCR {
         , DllCall("SelectObject", "Ptr", PDC, "Ptr", OBM)
         , DllCall("DeleteDC", "Ptr", HDC)
         , oHBM := this.IBase(HBM), oHBM.DC := PDC
-        return oHBM.DefineProp("__Delete", {call:(this, *)=>(DllCall("DeleteObject", "Ptr", this), DllCall("ReleaseDC", "Ptr", 0, "Ptr", this.DC))})
+        return oHBM.DefineProp("__Delete", {call:(this, *)=>(DllCall("DeleteObject", "Ptr", this), DllCall("DeleteDC", "Ptr", this.DC))})
     }
 
     static CreateDirect3DSoftwareBitmapFromWindow(hWnd) {
