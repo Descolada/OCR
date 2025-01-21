@@ -895,9 +895,9 @@ class OCR {
      * @returns {OCR.OcrResult} 
      */
     static FromDesktop(lang?, transform:=1, monitor?) {
-        if IsSet(lang) {
+        if IsSet(lang) && IsObject(lang) {
             this.__ExtractTransformParameters(lang, &transform)
-            lang := lang.HasProp("lang") ? lang : unset
+            lang := lang.HasProp("lang") ? lang.lang : unset
         }
         MonitorGet(monitor?, &Left, &Top, &Right, &Bottom)
         return this.FromRect(Left, Top, Right-Left, Bottom-Top, lang?, transform)
