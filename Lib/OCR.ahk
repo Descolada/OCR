@@ -358,7 +358,7 @@ class OCR {
          * @returns {Object} 
          */
         FindString(needle, i:=1, casesense:=False, wordCompareFunc?, searchArea?) {
-            local line, counter, found, x1, y1, x2, y2, splitNeedle, result, word
+            local line, counter := 0, found, x1, y1, x2, y2, splitNeedle, result, word
             if !(needle is String)
                 throw TypeError("Needle is required to be a string, not type " Type(needle), -1)
             if needle == ""
@@ -374,7 +374,7 @@ class OCR {
             }
             for line in this.Lines {
                 if IsSet(wordCompareFunc) || InStr(l := line.Text, needle, casesense) {
-                    counter := 0, found := []
+                    found := []
                     for word in line.Words {
                         If IsSet(searchArea) && (word.x < x1 || word.y < y1 || word.x+word.w > x2 || word.y+word.h > y2)
                             continue
@@ -429,7 +429,7 @@ class OCR {
             results := []
             for line in this.Lines {
                 if IsSet(wordCompareFunc) || InStr(l := line.Text, needle, casesense) {
-                    counter := 0, found := []
+                    found := []
                     for word in line.Words {
                         If IsSet(searchArea) && (word.x < x1 || word.y < y1 || word.x+word.w > x2 || word.y+word.h > y2)
                             continue
@@ -441,7 +441,7 @@ class OCR {
                                 result.DefineProp("BoundingRect", {value: this.__OCR.WordsBoundingRect(found*)})
                                 result.DefineProp("Words", {value:found})
                                 results.Push(result)
-                                counter := 0, found := [], result := unset
+                                found := [], result := unset
                             }
                         } else
                             found := []
