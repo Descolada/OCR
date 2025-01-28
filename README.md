@@ -85,10 +85,11 @@ Result.Words        => Array of all OCR.Word objects
 Result.ImageWidth   => Used image width
 Result.ImageHeight  => Used image height
 
-Result.FindString(needle, i:=1, casesense:=False, wordCompareFunc?, searchArea?)
-     Finds a string in the result
-Result.FindStrings(needle, casesense:=False, wordCompareFunc?, searchArea?)
-     Finds all strings in the result
+Result.FindString(Needle, Options?)
+     Finds a string in the result. Possible options (see descriptions at the function definition):
+     {CaseSense: False, IgnoreLinebreaks: False, AllowOverlap: False, i: 1, x, y, w, h, SearchFunc}
+Result.FindStrings(Needle, Options?)
+     Finds all strings in the result. 
 Result.Filter(callback)
      Returns a filtered result object that contains only words that satisfy the callback function
 Result.Crop(x1, y1, x2, y2)

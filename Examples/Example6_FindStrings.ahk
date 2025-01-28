@@ -8,7 +8,7 @@ Loop {
     if ib.Result != "OK"
         ExitApp
     result := OCR.FromDesktop(,2)
-    found := result.FindStrings(ib.Value,,RegExMatch)
+    found := result.FindStrings(ib.Value, {SearchFunc: RegExMatch})
     if !found.Length {
         MsgBox 'Phrase "' ib.Value '" not found!'
         continue

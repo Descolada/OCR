@@ -70,10 +70,11 @@
  * Result.ImageWidth   => Used image width
  * Result.ImageHeight  => Used image height
  * 
- * Result.FindString(needle, i:=1, casesense:=False, wordCompareFunc?, searchArea?)
- *      Finds a string in the result
- * Result.FindStrings(needle, casesense:=False, wordCompareFunc?, searchArea?)
- *      Finds all strings in the result
+ * Result.FindString(Needle, Options?)
+ *      Finds a string in the result. Possible options (see descriptions at the function definition): 
+ *      {CaseSense: False, IgnoreLinebreaks: False, AllowOverlap: false, i: 1, x, y, w, h, SearchFunc}
+ * Result.FindStrings(Needle, Options?)
+ *      Finds all strings in the result. 
  * Result.Filter(callback)
  *      Returns a filtered result object that contains only words that satisfy the callback function
  * Result.Crop(x1, y1, x2, y2)
@@ -346,109 +347,136 @@ class OCR {
         }
 
         /**
-         * Finds a string in the search results. Returns {x,y,w,h,Words} where Words contains an array of the matching Word objects.
-         * @param needle The string to find
-         * @param {number} i Which occurrence of needle to find
-         * @param {number} casesense Comparison case-sensitivity. Default is False/Off.
-         * @param wordCompareFunc Optionally a custom word comparison function. Accepts two arguments,
-         *     neither of which should contain spaces. 
-         *     When using RegExMatch as wordCompareFunc note that a "space" will split the RegEx into multiple parts.
-         *     Eg. "\w+   \d+" will actually match for a word satisfying "\w+" followed by a word satisfying "\d+"
-         * @param searchArea Optionally a {x1,y1,x2,y2} object defining the search area inside the result object
+         * Finds a string in the search results, and returns a new Result object.
+         * If the match is partial then the result will contain the whole word: in "hello world" searching "wo" will return "world".
+         * To force a full word search instead of a partial search, use IgnoreLinebreaks:True 
+         *  and add a space to the beginning and end: " hello "
+         * To search multi-line matches, set IgnoreLinebreaks:True and use a linebreak in the needle: "hello`nworld"
+         * @param Needle The string to find. 
+         * @param Options Extra search options object, which can contain the following properties:
+         *  CaseSense: False (this is ignored if a custom SearchFunc is used)
+         *  IgnoreLinebreaks: False (if this is True, then linebreaks are converted to whitespaces, otherwise remain `n)
+         *  AllowOverlap: False (if True then the needle can overlap itself)
+         *  i: 1 (which occurrence of the needle to find)
+         *  x, y, w, h: defines the search area inside the result object
+         *  SearchFunc: default is InStr, but if a custom function is provided then it needs to return
+         *      the needle location in the haystack, and accept arguments (Haystack, Needle, &FoundMatch)
+         *      This can used for example to perform a RegEx search by providing RegExMatch
          * @returns {Object} 
          */
-        FindString(needle, i:=1, casesense:=False, wordCompareFunc?, searchArea?) {
-            local line, counter := 0, found, x1, y1, x2, y2, splitNeedle, result, word
-            if !(needle is String)
-                throw TypeError("Needle is required to be a string, not type " Type(needle), -1)
-            if needle == ""
-                throw ValueError("Needle cannot be an empty string", -1)
-            splitNeedle := StrSplit(RegExReplace(needle, " +", " "), " "), needleLen := splitNeedle.Length
-            if !IsSet(wordCompareFunc)
-                wordCompareFunc := casesense ? ((arg1, arg2) => arg1 == arg2) : ((arg1, arg2) => arg1 = arg2)
-            If IsSet(searchArea) {
-                x1 := searchArea.HasOwnProp("x1") ? searchArea.x1 : -100000
-                y1 := searchArea.HasOwnProp("y1") ? searchArea.y1 : -100000
-                x2 := searchArea.HasOwnProp("x2") ? searchArea.x2 : 100000
-                y2 := searchArea.HasOwnProp("y2") ? searchArea.y2 : 100000
-            }
-            for line in this.Lines {
-                if IsSet(wordCompareFunc) || InStr(l := line.Text, needle, casesense) {
-                    found := []
-                    for word in line.Words {
-                        If IsSet(searchArea) && (word.x < x1 || word.y < y1 || word.x+word.w > x2 || word.y+word.h > y2)
-                            continue
-                        t := word.Text, len := StrLen(t)
-                        if wordCompareFunc(t, splitNeedle[found.Length+1]) {
-                            found.Push(word)
-                            if found.Length == needleLen {
-                                if ++counter == i {
-                                    result := this.Clone(), ObjAddRef(this.ptr)
-                                    result.DefineProp("BoundingRect", {value: this.__OCR.WordsBoundingRect(found*)})
-                                    result.DefineProp("Words", {value: found})
-                                    result.DefineProp("Lines", {value: []})
-                                    return result
-                                } else
-                                    found := []
-                            }
-                        } else
-                            found := []
-                    }
-                }
-            }
-            throw TargetError('The target string "' needle '" was not found', -1)
-        }
-    
+        FindString(Needle, Options := "") => this.__FindString(Needle, Options, 0)
+
         /**
-         * Finds all strings matching the needle in the search results. Returns an array of {x,y,w,h,Words} objects
-         * where Words contains an array of the matching Word objects.
-         * @param needle The string to find. 
-         * @param {number} casesense Comparison case-sensitivity. Default is False/Off.
-         * @param wordCompareFunc Optionally a custom word comparison function. Accepts two arguments,
-         *     neither of which should contain spaces. 
-         *     When using RegExMatch as wordCompareFunc note that a "space" will split the RegEx into multiple parts.
-         *     Eg. "\w+   \d+" will actually match for a word satisfying "\w+" followed by a word satisfying "\d+"
-         * @param searchArea Optionally a {x1,y1,x2,y2} object defining the search area inside the result object
+         * Finds all strings matching the needle in the search results. Returns an array of Result objects.
+         * @param Needle The string to find. 
+         * @param Options See Result.FindString. {CaseSense: False, IgnoreLinebreaks: False, AllowOverlap: false, i: 1, x, y, w, h, SearchFunc}
+         *  If i is specified then the result object will contains matches starting from i.
          * @returns {Array} 
          */
-        FindStrings(needle, casesense:=False, wordCompareFunc?, searchArea?) {
-            local line, counter, found, x1, y1, x2, y2, splitNeedle, result, word
-            if !(needle is String)
-                throw TypeError("Needle is required to be a string, not type " Type(needle), -1)
-            if needle == ""
+        FindStrings(Needle, Options := "") => this.__FindString(Needle, Options, true)
+
+        __FindString(Needle, Options, All) {
+            local CaseSense := false, IgnoreLinebreaks := false, AllowOverlap := false, i := 1, SearchFunc, x, y, w, h
+            local currentHaystack, fullHaystackLinebreaks := "`n", offset := 0, line, counter := 0, x1, y1, x2, y2, result, results := [], word
+
+            if !(Needle is String)
+                throw TypeError("Needle is required to be a string, not type " Type(Needle), -1)
+            if Trim(Needle, " `t`n`r") == ""
                 throw ValueError("Needle cannot be an empty string", -1)
-            splitNeedle := StrSplit(RegExReplace(needle, " +", " "), " "), needleLen := splitNeedle.Length
-            if !IsSet(wordCompareFunc)
-                wordCompareFunc := casesense ? ((arg1, arg2) => arg1 == arg2) : ((arg1, arg2) => arg1 = arg2)
-            If IsSet(searchArea) {
-                x1 := searchArea.HasOwnProp("x1") ? searchArea.x1 : -100000
-                y1 := searchArea.HasOwnProp("y1") ? searchArea.y1 : -100000
-                x2 := searchArea.HasOwnProp("x2") ? searchArea.x2 : 100000
-                y2 := searchArea.HasOwnProp("y2") ? searchArea.y2 : 100000
+
+            OCR.__ExtractNamedParameters(Options, "CaseSense", &CaseSense, "IgnoreLinebreaks", &IgnoreLinebreaks, "AllowOverlap", &AllowOverlap, "i", &i, "SearchFunc", &SearchFunc, "x", &x, "y", &y, "w", &w, "h", &h)
+
+            if !IsSet(SearchFunc)
+                SearchFunc := (haystack, needle, &foundstr) => (pos := InStr(haystack, needle, casesense), foundstr := SubStr(haystack, pos, StrLen(needle)), pos)
+
+            if (IsSet(x) || IsSet(y) || IsSet(w) || IsSet(h)) {
+                x1 := x ?? -100000, y1 := y ?? -100000, x2 := IsSet(w) ? x + w : 100000, y2 := IsSet(h) ? y + h : 100000 
             }
-            results := []
-            for line in this.Lines {
-                if IsSet(wordCompareFunc) || InStr(l := line.Text, needle, casesense) {
-                    found := []
-                    for word in line.Words {
-                        If IsSet(searchArea) && (word.x < x1 || word.y < y1 || word.x+word.w > x2 || word.y+word.h > y2)
-                            continue
-                        t := word.Text, len := StrLen(t)
-                        if wordCompareFunc(t, splitNeedle[found.Length+1]) {
-                            found.Push(word)
-                            if found.Length == needleLen {
-                                result := this.Clone(), ObjAddRef(result.ptr)
-                                result.DefineProp("BoundingRect", {value: this.__OCR.WordsBoundingRect(found*)})
-                                result.DefineProp("Words", {value:found})
-                                results.Push(result)
-                                found := [], result := unset
-                            }
-                        } else
-                            found := []
+
+            tokenizedHaystack := [IgnoreLinebreaks ? " " : "`n"]
+            for Line in this.Lines {
+                fullHaystackLinebreaks .= line.Text "`n"
+                for Word in Line.Words
+                    tokenizedHaystack.Push(Word, " ")
+                tokenizedHaystack.Pop()
+                tokenizedHaystack.Push(IgnoreLinebreaks ? " " : "`n")
+            }
+
+            fullHaystackNoLinebreaks := StrReplace(fullHaystackLinebreaks, "`n", " ") ; Make sure the words are in the same order as the tokenized version
+            fullHaystack := IgnoreLinebreaks ? fullHaystackNoLinebreaks : fullHaystackLinebreaks
+
+            Needle := RegExReplace(StrReplace(Needle, "`t", " "), " +", " ")
+
+            fullFirst := SubStr(Needle, 1, 1) ~= "[ \n]", fullLast := SubStr(Needle, -1, 1) ~= "[ \n]"
+
+            currentHaystack := fullHaystack
+            Loop {
+                if !(loc := SearchFunc(currentHaystack, Needle, &foundNeedle))
+                    break
+
+                if IsObject(foundNeedle)
+                    foundNeedle := foundNeedle[]
+
+                foundLen := AllowOverlap ? 1 : StrLen(foundNeedle)
+                currentHaystack := SubStr(currentHaystack, loc + foundLen) ; Remove the match from the haystack, allowing overlap
+                offset += loc + foundLen - 1
+
+                if ++counter < i
+                    continue
+
+                tokenizedNeedle := []
+                ; Tokenize the needle
+                for wsNeedle in wsSplit := StrSplit(foundNeedle, " ") {
+                    for lbNeedle in lbSplit := StrSplit(wsNeedle, "`n") {
+                        tokenizedNeedle.Push(lbNeedle, "`n")
                     }
+                    if lbSplit.Length
+                        tokenizedNeedle.Pop()
+                    tokenizedNeedle.Push(" ")
                 }
+                tokenizedNeedle.Pop()
+                
+                preceding := SubStr(fullHaystackNoLinebreaks, 1, offset - foundLen)
+                ; Find first Word location
+                StrReplace(preceding, " ",,, &startingWord:=0)
+                startingWord := startingWord*2 + fullFirst - 1 ; Substracted 1 to allow subsequent loop to just add A_Index
+
+                foundNeedle := "", foundWords := [], foundLines := [], line := OCR.Line(), line.DefineProp("Words", {value:[]}), line.DefineProp("Text", {value:""})
+                Loop tokenizedNeedle.Length {
+                    word := tokenizedHaystack[startingWord + A_Index]
+                    if (word == "`n") {
+                        foundNeedle .= line.Text
+                        line.Text := RTrim(line.Text), foundLines.Push(line)
+                        line := OCR.Line(), line.DefineProp("Words", {value:[]}), line.DefineProp("Text", {value:""})
+                    }
+                    if !IsObject(word)
+                        continue
+                    If IsSet(searchArea) && (word.x < x1 || word.y < y1 || word.x+word.w > x2 || word.y+word.h > y2) {
+                        counter--
+                        continue 2
+                    }
+                    line.Words.Push(word), line.Text .= word.Text " "
+                    foundWords.Push(word)
+                }
+                if line.Text {
+                    foundNeedle .= line.Text
+                    line.Text := RTrim(line.Text), foundLines.Push(line)
+                }
+
+                result := this.Clone(), ObjAddRef(this.ptr)
+                result.DefineProp("BoundingRect", {value: this.__OCR.WordsBoundingRect(foundWords*)})
+                result.DefineProp("Lines", {value: foundLines})
+                result.DefineProp("Words", {value: foundWords})
+                result.DefineProp("Text", {value: foundNeedle})
+                if All {
+                    results.Push(result)
+                } else
+                    return result
             }
-            return results
+            if All
+                return results
+
+            throw TargetError('The target string "' Needle '" was not found', -1)
         }
     
         /**
