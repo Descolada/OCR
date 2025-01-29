@@ -384,7 +384,7 @@ class OCR {
             if Trim(Needle, " `t`n`r") == ""
                 throw ValueError("Needle cannot be an empty string", -1)
 
-            OCR.__ExtractNamedParameters(Options, "CaseSense", &CaseSense, "IgnoreLinebreaks", &IgnoreLinebreaks, "AllowOverlap", &AllowOverlap, "i", &i, "SearchFunc", &SearchFunc, "x", &x, "y", &y, "w", &w, "h", &h)
+            this.__OCR.__ExtractNamedParameters(Options, "CaseSense", &CaseSense, "IgnoreLinebreaks", &IgnoreLinebreaks, "AllowOverlap", &AllowOverlap, "i", &i, "SearchFunc", &SearchFunc, "x", &x, "y", &y, "w", &w, "h", &h)
 
             if !IsSet(SearchFunc)
                 SearchFunc := (haystack, needle, &foundstr) => (pos := InStr(haystack, needle, casesense), foundstr := SubStr(haystack, pos, StrLen(needle)), pos)
@@ -441,13 +441,13 @@ class OCR {
                 StrReplace(preceding, " ",,, &startingWord:=0)
                 startingWord := startingWord*2 + fullFirst - 1 ; Substracted 1 to allow subsequent loop to just add A_Index
 
-                foundNeedle := "", foundWords := [], foundLines := [], line := OCR.Line(), line.DefineProp("Words", {value:[]}), line.DefineProp("Text", {value:""})
+                foundNeedle := "", foundWords := [], foundLines := [], line := this.__OCR.Line(this), line.DefineProp("Words", {value:[]}), line.DefineProp("Text", {value:""})
                 Loop tokenizedNeedle.Length {
                     word := tokenizedHaystack[startingWord + A_Index]
                     if (word == "`n") {
                         foundNeedle .= line.Text
                         line.Text := RTrim(line.Text), foundLines.Push(line)
-                        line := OCR.Line(), line.DefineProp("Words", {value:[]}), line.DefineProp("Text", {value:""})
+                        line := this.__OCR.Line(this), line.DefineProp("Words", {value:[]}), line.DefineProp("Text", {value:""})
                     }
                     if !IsObject(word)
                         continue
@@ -1020,7 +1020,6 @@ class OCR {
             , hBitmap := this.CreateHBitmap(X, Y, W, H,, scale)
             , SoftwareBitmap := this.HBitmapToSoftwareBitmap(hBitmap,, transform)
             , result := this(SoftwareBitmap, Options)
-        result.Relative := {Screen:{x:x, y:y, w:w, h:h}}
         return this.NormalizeCoordinates(result, scale, x, y)
     }
 
@@ -1650,10 +1649,10 @@ class OCR {
 
     static NormalizeCoordinates(result, scale, x:=0, y:=0) {
         local word
-        if scale != 1 {
-            for word in result.Words
-                word.x := Integer(word.x / scale)+x, word.y := Integer(word.y / scale)+y, word.w := Integer(word.w / scale), word.h := Integer(word.h / scale), word.BoundingRect := {X:word.x, Y:word.y, W:word.w, H:word.h}
-        }
+        if (scale == 1 && x == 0 && y == 0)
+            return result
+        for word in result.Words
+            word.x := Integer(word.x / scale)+x, word.y := Integer(word.y / scale)+y, word.w := Integer(word.w / scale), word.h := Integer(word.h / scale), word.BoundingRect := {X:word.x, Y:word.y, W:word.w, H:word.h}
         return result
     }
     
