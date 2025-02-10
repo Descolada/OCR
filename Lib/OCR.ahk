@@ -451,7 +451,7 @@ class OCR {
                     }
                     if !IsObject(word)
                         continue
-                    If IsSet(searchArea) && (word.x < x1 || word.y < y1 || word.x+word.w > x2 || word.y+word.h > y2) {
+                    If IsSet(x1) && (word.x < x1 || word.y < y1 || word.x+word.w > x2 || word.y+word.h > y2) {
                         counter--
                         continue 2
                     }
