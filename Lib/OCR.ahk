@@ -291,7 +291,7 @@ class OCR {
             this.CloseIClosable(SoftwareBitmap)
 
         if scale != 1
-            this.NormalizeCoordinates(Result, scale)
+            this.NormalizeCoordinates(OcrResult, scale)
 
         return OcrResult
     }
