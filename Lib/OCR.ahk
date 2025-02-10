@@ -216,7 +216,7 @@ class OCR {
 
         BitmapFrameWithSoftwareBitmap := ComObjQuery(BitmapDecoder, IBitmapFrameWithSoftwareBitmap := "{FE287C9A-420C-4963-87AD-691436E08383}")
        if !IsSet(x) && (width < 40 || height < 40 || scale != 1) {
-            scale := scale = 1 ? 40.0 / Min(width, height) : scale, this.ImageWidth := Floor(width*scale), this.ImageHeight := Floor(height*scale)
+            scale := scale = 1 ? 40.0 / Min(width, height) : scale, this.ImageWidth := width := Floor(width*scale), this.ImageHeight := height := Floor(height*scale)
             ComCall(7, __OCR.BitmapTransform, "int", this.ImageWidth) ; put_ScaledWidth
             ComCall(9, __OCR.BitmapTransform, "int", this.ImageHeight) ; put_ScaledHeight
             ComCall(8, BitmapFrame, "uint*", &BitmapPixelFormat:=0) ; get_BitmapPixelFormat
