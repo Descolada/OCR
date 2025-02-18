@@ -1,7 +1,6 @@
 #Requires AutoHotkey v2
 #include ..\Lib\OCR.ahk
 
-CoordMode "Mouse", "Window"
 Loop {
     ib := InputBox("Insert search phrase to find from active window: ", "OCR")
     Sleep 100 ; Small delay to wait for the InputBox to close

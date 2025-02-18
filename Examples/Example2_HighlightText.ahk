@@ -15,5 +15,6 @@ if !IsSet(found) {
 
 found.Highlight()
 
-CoordMode "Mouse", "Window"
+; By default OCR.FromWindow uses A_CoordModePixel, and the default values for CoordModes are "Client"
+; meaning here we can just mouse functions without adjusting anything.
 MouseClickDrag("Left", found.x, found.y, found.x + found.w, found.y + found.h)

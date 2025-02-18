@@ -9,6 +9,7 @@
  * OCR.FromDesktop(Options?, Monitor?)
  * OCR.FromRect(X, Y, W, H, Options?)
  * OCR.FromWindow(WinTitle:="", Options?, WinText:="", ExcludeTitle:="", ExcludeText:="")
+ *      Note: the result object coordinates will be in CoordMode "Pixel"
  * OCR.FromFile(FileName, Options?)
  * OCR.FromBitmap(bitmap, Options?, hDC?)
  * OCR.FromPDF(FileName, Options?, Start:=1, End?, Password:="") => returns an array of results for each PDF page
@@ -206,11 +207,12 @@ class OCR {
      * @returns {OCR.Result} 
      */
     static Call(RandomAccessStreamOrSoftwareBitmap, Options:=0) {
-        local SoftwareBitmap := 0, RandomAccessStream := 0, lang:="FirstFromAvailableLanguages", width, height, x, y, w, h, scale, grayscale, invertcolors, OcrResult := this.Result(), Result, transform := 0, decoder := 0
+        local SoftwareBitmap := 0, RandomAccessStream := 0, lang:="FirstFromAvailableLanguages", width, height, x := 0, y := 0, w := 0, h := 0, scale, grayscale, invertcolors, OcrResult := this.Result(), Result, transform := 0, decoder := 0
         this.__ExtractTransformParameters(Options, &transform)
         scale := transform.scale, grayscale := transform.grayscale, invertcolors := transform.invertcolors, rotate := transform.rotate, flip := transform.flip
         this.__ExtractNamedParameters(Options, "x", &x, "y", &y, "w", &w, "h", &h, "language", &lang, "lang", &lang, "decoder", &decoder)
         this.LoadLanguage(lang)
+        local customRegion := x || y || w || h
 
         try SoftwareBitmap := ComObjQuery(RandomAccessStreamOrSoftwareBitmap, "{689e0708-7eef-483f-963f-da938818e073}") ; ISoftwareBitmap
         if SoftwareBitmap {
@@ -219,7 +221,7 @@ class OCR {
             this.ImageWidth := width, this.ImageHeight := height
             if (Floor(width*scale) > this.MaxImageDimension) or (Floor(height*scale) > this.MaxImageDimension)
                throw ValueError("Image is too big - " width "x" height ".`nIt should be maximum - " this.MaxImageDimension " pixels (with scale applied)")
-            if scale != 1 || IsSet(x) || rotate || flip
+            if scale != 1 || customRegion || rotate || flip
                 SoftwareBitmap := this.TransformSoftwareBitmap(SoftwareBitmap, &width, &height, scale, rotate, flip, x?, y?, w?, h?)
             goto SoftwareBitmapCommon
         }
@@ -239,7 +241,7 @@ class OCR {
            throw ValueError("Image is too big - " width "x" height ".`nIt should be maximum - " this.MaxImageDimension " pixels")
 
         BitmapFrameWithSoftwareBitmap := ComObjQuery(BitmapDecoder, IBitmapFrameWithSoftwareBitmap := "{FE287C9A-420C-4963-87AD-691436E08383}")
-       if !IsSet(x) && (width < 40 || height < 40 || scale != 1) {
+       if !customRegion && (width < 40 || height < 40 || scale != 1) {
             scale := scale = 1 ? 40.0 / Min(width, height) : scale, OcrResult.ImageWidth := Floor(width*scale), OcrResult.ImageHeight := Floor(height*scale)
             ComCall(7, this.BitmapTransform, "int", OcrResult.ImageWidth) ; put_ScaledWidth
             ComCall(9, this.BitmapTransform, "int", OcrResult.ImageHeight) ; put_ScaledHeight
@@ -251,7 +253,7 @@ class OCR {
             ComCall(6, BitmapFrameWithSoftwareBitmap, "ptr*", SoftwareBitmap:=this.IBase())   ; GetSoftwareBitmapAsync
         }
         this.WaitForAsync(&SoftwareBitmap)
-        if IsSet(x) || rotate || flip
+        if customRegion || rotate || flip
             SoftwareBitmap := this.TransformSoftwareBitmap(SoftwareBitmap, &width, &height, scale, rotate, flip, x?, y?, w?, h?)
 
         SoftwareBitmapCommon:
@@ -290,8 +292,8 @@ class OCR {
         if SoftwareBitmap is this.IBase
             this.CloseIClosable(SoftwareBitmap)
 
-        if scale != 1
-            this.NormalizeCoordinates(OcrResult, scale)
+        if scale != 1 || x != 0 || y != 0
+            this.NormalizeCoordinates(OcrResult, scale, x, y)
 
         return OcrResult
     }
@@ -571,7 +573,7 @@ class OCR {
          * Gets the bounding rectangle of the text in {x,y,w,h} format. 
          * The bounding rectangles coordinate system will be dependant on the image capture method.
          * For example, if the image was captured as a rectangle from the screen, then the coordinates
-         * will be relative to the left top corner of the rectangle.
+         * will be relative to the left top corner of the screen.
          */
         BoundingRect {
             get {
@@ -647,12 +649,14 @@ class OCR {
     
             x := this.x, y := this.y, w := this.w, h := this.h
             if this.HasProp("Relative") {
-                if this.Relative.HasOwnProp("Client")
-                    WinGetClientPos(&rX, &rY,,, this.Relative.Client.hWnd), x += rX + this.Relative.Client.x, y += rY + this.Relative.Client.y
-                else if this.Relative.HasOwnProp("Window")
-                    WinGetPos(&rX, &rY,,, this.Relative.Window.hWnd), x += rX + this.Relative.Window.x, y += rY + this.Relative.Window.y
-                else if this.Relative.HasOwnProp("Screen")
-                    x += this.Relative.Screen.X, y += this.Relative.Screen.Y
+                if this.Relative.HasProp("CoordMode") {
+                    if this.Relative.CoordMode = "Client"
+                        WinGetClientPos(&rX, &rY,,, this.Relative.hWnd), x += rX, y += rY
+                    else if this.Relative.CoordMode = "Window"
+                        WinGetPos(&rX, &rY,,, this.Relative.hWnd), x += rX, y += rY
+                }
+                x += this.Relative.HasProp("x") ? this.Relative.x : 0
+                y += this.Relative.HasProp("y") ? this.Relative.y : 0
             }
     
             if !Guis.Has(this) {
@@ -679,20 +683,23 @@ class OCR {
          * Clicks an object
          * If this object (the one Click is called from) contains a "Relative" property (this is
          * added by default with OCR.FromWindow) containing a hWnd property, then that window will be activated,
-         * otherwise the Relative objects Window.xy/Client.xy properties values will be added to the x and y coordinates as offsets.
+         * otherwise the Relative objects x/y properties values will be added to the x and y coordinates as offsets.
          */
         Click(WhichButton?, ClickCount?, DownOrUp?) {
             local x := this.x, y := this.y, w := this.w, h := this.h, mode := "Screen", hwnd
             if this.HasProp("Relative") {
-                if this.Relative.HasOwnProp("Window")
-                    mode := "Window", hwnd := this.Relative.Window.Hwnd
-                else if this.Relative.HasOwnProp("Client")
-                    mode := "Client", hwnd := this.Relative.Client.Hwnd
-                if IsSet(hwnd) && !WinActive(hwnd) {
-                    WinActivate(hwnd)
-                    WinWaitActive(hwnd,,1)
+                if this.Relative.HasProp("CoordMode") {
+                    if this.Relative.CoordMode = "Window"
+                        mode := "Window", hwnd := this.Relative.Hwnd
+                    else if this.Relative.CoordMode = "Client"
+                        mode := "Client", hwnd := this.Relative.Hwnd
+                    if IsSet(hwnd) && !WinActive(hwnd) {
+                        WinActivate(hwnd)
+                        WinWaitActive(hwnd,,1)
+                    }
                 }
-                x += this.Relative.%mode%.x, y += this.Relative.%mode%.y
+                x += this.Relative.HasProp("x") ? this.Relative.x : 0
+                y += this.Relative.HasProp("y") ? this.Relative.y : 0
             }
             oldCoordMode := A_CoordModeMouse
             CoordMode "Mouse", mode
@@ -704,8 +711,7 @@ class OCR {
          * ControlClicks an object.
          * If the result object originates from OCR.FromWindow which captured only the client area,
          * then the result object will contain correct coordinates for the ControlClick. 
-         * If OCR.FromWindow captured the Window area, then the Relative property
-         * will contain Window property, and those coordinates will be adjusted to Client area.
+         * Coordinates will be adjusted to Client area from the CoordMode that the OCR happened in.
          * Otherwise, if additionally a WinTitle is provided then the coordinates are treated as Screen 
          * coordinates and converted to Client coordinates.
          * @param WinTitle If WinTitle is set, then the coordinates stored in Obj will be converted to
@@ -713,9 +719,12 @@ class OCR {
          */
         ControlClick(WinTitle?, WinText?, WhichButton?, ClickCount?, Options?, ExcludeTitle?, ExcludeText?) {
             local x := this.x, y := this.y, w := this.w, h := this.h, hWnd
-            if this.HasProp("Relative") && (this.Relative.HasOwnProp("Client") || this.Relative.HasOwnProp("Window")) {
-                mode := this.Relative.HasOwnProp("Client") ? "Client" : "Window"
-                , obj := this.Relative.%mode%, x += obj.x, y += obj.y, hWnd := obj.hWnd
+            if this.HasProp("Relative") {
+                x += this.Relative.HasProp("x") ? this.Relative.x : 0
+                y += this.Relative.HasProp("y") ? this.Relative.y : 0
+            }
+            if this.HasProp("Relative") && this.Relative.HasProp("CoordMode") && (this.Relative.CoordMode = "Client" || this.Relative.CoordMode = "Window") {
+                mode := this.Relative.CoordMode, hWnd := this.Relative.hWnd
                 if mode = "Window" {
                     ; Window -> Client
                     RECT := Buffer(16, 0), pt := Buffer(8, 0)
@@ -739,12 +748,8 @@ class OCR {
         OffsetCoordinates(offsetX?, offsetY?) {
             if !IsSet(offsetX) || !IsSet(offsetY) {
                 if this.HasOwnProp("Relative") {
-                    if this.Relative.HasOwnProp("Client")
-                        offsetX := this.Relative.Client.x, offsetY := this.Relative.Client.x
-                    else if this.Relative.HasOwnProp("Window")
-                        offsetX := this.Relative.Window.x, offsetY := this.Relative.Window.y
-                    else
-                        throw Error("No appropriate Relative property found",, -1)
+                    offsetX := this.Relative.HasProp("x") ? this.Relative.X : 0
+                    offsetY := this.Relative.HasProp("y") ? this.Relative.Y : 0
                 } else
                     throw Error("No Relative property found",, -1)
             }
@@ -877,16 +882,13 @@ class OCR {
     }
 
     /**
-     * Returns an OCR results object for a given window. Locations of the words will be relative to the
-     * window or client area, so for interactions use CoordMode "Window" or "Client". If onlyClientArea
-     * contained relative coordinates then Result coordinates will also be relative to the captured area.
-     * In that case offsets for Window/Client area are stored in Result.Relative.Client.x and y or .Window.x and y.
-     * Additionally, Result.Relative.Screen.x and y are also stored. 
+     * Returns an OCR results object for a given window. Locations of the words will be relative
+     * using the CoordMode from A_CoordModePixel (default is Client). 
+     * The window from where the image was captured is stored in Result.Relative.hWnd
+     * Additionally, Result.Relative.CoordMode is stored (the A_CoordModePixel at the time of OCR).
      * @param WinTitle A window title or other criteria identifying the target window.
      * @param Options Optional: OCR options {lang, scale, grayscale, invertcolors, rotate, flip, x, y, w, h, decoder}. 
      * Additionally for FromWindow the options may include:
-     *      onlyClientArea: Whether only the client area or the whole window should be OCR-d. Default is 0.
-     *          This also affects x,y,w,h as they'll be relative to the client area, not window.
      *      mode:  Different methods of capturing the window. 
      *        0 = uses GetDC with BitBlt
      *        1 = same as 0 but window transparency is turned off beforehand with WinSetTransparent
@@ -901,13 +903,13 @@ class OCR {
      * @returns {OCR.Result} 
      */
     static FromWindow(WinTitle:="", Options:=0, WinText:="", ExcludeTitle:="", ExcludeText:="") {
-        local result, onlyClientArea := 0, mode := 4, X := 0, Y := 0, W := 0, H := 0, sX, sY, hBitMap, hwnd, customRect := 0, transform := 0
+        local result, coordsmode := A_CoordModePixel, onlyClientArea := coordsMode = "Client", mode := 4, X := 0, Y := 0, W := 0, H := 0, sX, sY, hBitMap, hwnd, customRect := 0, transform := 0
         if !Options && Type(WinTitle) = "Object"
             Options := WinTitle, WinTitle := ""
         if IsObject(Options)
             Options := Options.Clone()
         this.__ExtractTransformParameters(Options, &transform)
-        this.__ExtractNamedParameters(Options, "x", &x, "y", &y, "w", &w, "width", &w, "h", &h, "height", &h, "onlyClientArea", &onlyClientArea, "mode", &mode, "WinTitle", &WinTitle, "WinText", &WinText, "ExcludeTitle", &ExcludeTitle, "ExcludeText", &ExcludeText)
+        this.__ExtractNamedParameters(Options, "x", &x, "y", &y, "w", &w, "width", &w, "h", &h, "height", &h, "mode", &mode, "WinTitle", &WinTitle, "WinText", &WinText, "ExcludeTitle", &ExcludeTitle, "ExcludeText", &ExcludeText)
         this.__DeleteProps(Options, "x", "y", "w", "width", "h", "height", "scale", "mode")
         if (x !=0 || y != 0 || w != 0 || h != 0)
             customRect := 1
@@ -923,7 +925,7 @@ class OCR {
         }
 
         WinGetPos(&wX, &wY, &wW, &wH, hWnd)
-        If onlyClientArea = 1 {
+        If onlyClientArea {
             WinGetClientPos(&cX, &cY, &cW, &cH, hWnd)
             W := W || cW, H := H || cH, sX := X + cX, sY := Y + cY  ; Calculate final X and Y screen coordinates
         } else {
@@ -973,9 +975,10 @@ class OCR {
             result := this(SoftwareBitmap, Options)
         }
 
-        result.Relative := {Screen:{X:sX, Y:sY, W:W, H:H}}
-        , result.Relative.%(onlyClientArea = 1 ? "Client" : "Window")% := {X:X, Y:Y, W:W, H:H, hWnd:hWnd}
-        this.NormalizeCoordinates(result, transform.scale)
+        result.Relative := {CoordMode:coordsmode, hWnd:hWnd}
+        if coordsmode = "Screen"
+            x += sX, y += sY
+        this.NormalizeCoordinates(result, transform.scale, x, y)
         if mode = 5 && !onlyClientArea
             result.OffsetCoordinates(offsetX, offsetY)
         return result
@@ -983,9 +986,7 @@ class OCR {
 
     /**
      * Returns an OCR results object for the whole desktop. Locations of the words will be relative to
-     * the screen (CoordMode "Screen") in a single-monitor setup. If "monitor" argument is specified
-     * then coordinates might be relative to the monitor, whereas relative offsets will be stored in
-     * Result.Relative.Screen.x and y properties. 
+     * the primary screen (CoordMode "Screen"), even if a secondary monitor is being captured.
      * @param Options Optional: OCR options {lang, scale, grayscale, invertcolors, rotate, flip, x, y, w, h, decoder}. 
      * @param Monitor Optional: The monitor from which to get the desktop area. Default is primary monitor.
      *   If screen scaling between monitors differs, then use DllCall("SetThreadDpiAwarenessContext", "ptr", -3)
@@ -1001,8 +1002,7 @@ class OCR {
 
     /**
      * Returns an OCR results object for a region of the screen. Locations of the words will be relative
-     * to the top left corner of the rectangle. The return object will contain Relative.Screen.x and y properties
-     * which are the original x and y that FromRect was called with.
+     * to the screen.
      * @param x Screen x coordinate
      * @param y Screen y coordinate
      * @param w Region width. Maximum is OCR.MaxImageDimension; minimum is 40 pixels (source: user FanaticGuru in AutoHotkey forums), smaller images will be scaled to at least 40 pixels.
@@ -1361,7 +1361,7 @@ class OCR {
         if flip
             ComCall(13, BitmapTransform, "uint", flip) ; put_Flip
 
-        if IsSet(X) {
+        if IsSet(X) && (X != 0 || Y != 0)  {
             bounds := Buffer(16,0), NumPut("int", Floor(X*scale), "int", Floor(Y*scale), "int", Floor(sbW*scale), "int", Floor(sbH*scale), bounds)
             ComCall(17, BitmapTransform, "ptr", bounds) ; put_Bounds
         }
