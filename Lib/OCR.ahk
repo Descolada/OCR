@@ -1043,6 +1043,7 @@ class OCR {
         if !DllCall("GetObject", "ptr", Bitmap, "int", pBitmapInfo.Size, "ptr", pBitmapInfo) {
             DllCall("gdiplus\GdipCreateHBITMAPFromBitmap", "UPtr", Bitmap, "UPtr*", &hBitmap:=0, "Int", 0xffffffff)
             DllCall("GetObject", "ptr", hBitmap, "int", pBitmapInfo.Size, "ptr", pBitmapInfo)
+            Bitmap := 0 ; Marks hBitmap to be deleted afterwards
         } else
             hBitmap := Bitmap
 
@@ -1069,9 +1070,13 @@ class OCR {
             this.NormalizeCoordinates(result, scale)
             DllCall("DeleteDC", "Ptr", pDC)
             , DllCall("DeleteObject", "UPtr", hBM2)
-            return result
+            goto End
         }
-        return this(this.HBitmapToSoftwareBitmap(hBitmap, hDC?, transform), Options)
+        result := this(this.HBitmapToSoftwareBitmap(hBitmap, hDC?, transform), Options)
+        End:
+        if !Bitmap
+            DllCall("DeleteObject", "UPtr", hBitmap)
+        return result
     } 
 
     /**
