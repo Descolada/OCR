@@ -1035,7 +1035,7 @@ class OCR {
     static FromBitmap(Bitmap, Options:=0, hDC?) {
         local result, pDC, hBitmap, hBM2, oBM, oBM2, pBitmapInfo := Buffer(32, 0), W, H, scale, transform := 0
         if IsObject(Options)
-            Options := Options.Clone
+            Options := Options.Clone()
         this.__ExtractTransformParameters(Options, &transform)
         scale := transform.scale
         this.__ExtractNamedParameters(Options, "hDC", &hDC)
