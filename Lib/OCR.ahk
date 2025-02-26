@@ -241,19 +241,19 @@ class OCR {
            throw ValueError("Image is too big - " width "x" height ".`nIt should be maximum - " this.MaxImageDimension " pixels")
 
         BitmapFrameWithSoftwareBitmap := ComObjQuery(BitmapDecoder, IBitmapFrameWithSoftwareBitmap := "{FE287C9A-420C-4963-87AD-691436E08383}")
-       if !customRegion && (width < 40 || height < 40 || scale != 1) {
-            scale := scale = 1 ? 40.0 / Min(width, height) : scale, OcrResult.ImageWidth := Floor(width*scale), OcrResult.ImageHeight := Floor(height*scale)
-            ComCall(7, this.BitmapTransform, "int", OcrResult.ImageWidth) ; put_ScaledWidth
-            ComCall(9, this.BitmapTransform, "int", OcrResult.ImageHeight) ; put_ScaledHeight
+        OcrResult.ImageWidth := width, OcrResult.ImageHeight := height
+        if !(customRegion || rotate || flip) && (width < 40 || height < 40 || scale != 1) {
+            scale := scale = 1 ? 40.0 / Min(width, height) : scale
+            ComCall(7, this.BitmapTransform, "int", width := Floor(width*scale)) ; put_ScaledWidth
+            ComCall(9, this.BitmapTransform, "int", height := Floor(height*scale)) ; put_ScaledHeight
             ComCall(8, BitmapFrame, "uint*", &BitmapPixelFormat:=0) ; get_BitmapPixelFormat
             ComCall(9, BitmapFrame, "uint*", &BitmapAlphaMode:=0) ; get_BitmapAlphaMode
             ComCall(8, BitmapFrameWithSoftwareBitmap, "uint", BitmapPixelFormat, "uint", BitmapAlphaMode, "ptr", this.BitmapTransform, "uint", IgnoreExifOrientation := 0, "uint", DoNotColorManage := 0, "ptr*", SoftwareBitmap:=this.IBase()) ; GetSoftwareBitmapAsync
         } else {
-            OcrResult.ImageWidth := width, OcrResult.ImageHeight := height
             ComCall(6, BitmapFrameWithSoftwareBitmap, "ptr*", SoftwareBitmap:=this.IBase())   ; GetSoftwareBitmapAsync
         }
         this.WaitForAsync(&SoftwareBitmap)
-        if customRegion || rotate || flip
+        if customRegion || rotate || flip || scale != 1
             SoftwareBitmap := this.TransformSoftwareBitmap(SoftwareBitmap, &width, &height, scale, rotate, flip, x?, y?, w?, h?)
 
         SoftwareBitmapCommon:
