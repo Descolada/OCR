@@ -2,6 +2,7 @@
 January 2025 version 2 (alpha stage) of this library was published, which introduces multiple breaking changes. Major differences include:
 1. Options common to the different OCR functions (such as `scale`, `lang` etc) are now gathered under the `Options` argument
 2. OCR.Result objects now contain common methods to all result types (Result, Line, Word, etc) such as `Result.Highlight` and `Result.Click`
+3. OCR.FromWindow uses CoordMode from A_CoordModePixel and the option `onlyClientArea` is no longer valid. (applied in 18.02.2025 update)
 
 Since v2 is still in alpha stage, breaking changes are still allowed. If you have any suggestions about the syntax or feature requests, please open an Issue here in GitHub.
 
@@ -24,6 +25,7 @@ OCR(RandomAccessStreamOrSoftwareBitmap, Options?)
 OCR.FromDesktop(Options?, Monitor?)
 OCR.FromRect(X, Y, W, H, Options?)
 OCR.FromWindow(WinTitle:="", Options?, WinText:="", ExcludeTitle:="", ExcludeText:="")
+     Note: the result object coordinates will be in CoordMode "Pixel"
 OCR.FromFile(FileName, Options?)
 OCR.FromBitmap(bitmap, Options?, hDC?)
 OCR.FromPDF(FileName, Options?, Start:=1, End?, Password:="") => returns an array of results for each PDF page
@@ -38,6 +40,7 @@ Options can be an object containing none or all of these elements:
      scale: a Float scale factor to zoom the image in or out, which might improve detection. 
             The resulting coordinates will be adjusted to scale. Default is 1.
      grayscale: Boolean 0 | 1 whether to convert the image to black-and-white. Default is 0.
+     monochrome: 0-255, converts all pixels with luminosity less than the threshold to black, otherwise to white. Default is 0 (no conversion).
      invertcolors: Boolean 0 | 1, whether to invert the colors of the image. Default is 0.
      rotate: 0 | 90 | 180 | 270, can be used to rotate the image clock-wise by degrees. Default is 0.
      flip: 0 | "x" | "y", can be used to flip the image on the x- or y-axis. Default is 0.

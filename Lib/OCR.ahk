@@ -24,6 +24,7 @@
  *      scale: a Float scale factor to zoom the image in or out, which might improve detection. 
  *             The resulting coordinates will be adjusted to scale. Default is 1.
  *      grayscale: Boolean 0 | 1 whether to convert the image to black-and-white. Default is 0.
+ *      monochrome: 0-255, converts all pixels with luminosity less than the threshold to black, otherwise to white. Default is 0 (no conversion).
  *      invertcolors: Boolean 0 | 1, whether to invert the colors of the image. Default is 0.
  *      rotate: 0 | 90 | 180 | 270, can be used to rotate the image clock-wise by degrees. Default is 0.
  *      flip: 0 | "x" | "y", can be used to flip the image on the x- or y-axis. Default is 0.
@@ -156,44 +157,66 @@ class OCR {
             {
                 unsigned int a, r, g, b, gray, ARGB;
                 unsigned int x, y, offset = Stride/4;
-                for (y = 0; y < h; ++y) {
+                for (y = 0; y < h * offset; y += offset) {
                     for (x = 0; x < w; ++x) {
-                        ARGB = bitmap[x+(y*offset)];
+                        ARGB = bitmap[x+y];
                         a = ARGB & 0xFF000000;
                         r = (ARGB & 0x00FF0000) >> 16;
                         g = (ARGB & 0x0000FF00) >> 8;
                         b = (ARGB & 0x000000FF);
                         gray = ((300 * r) + (590 * g) + (110 * b)) >> 10;
-                        bitmap[x+(y*offset)] = (gray << 16) | (gray << 8) | gray | a;
+                        bitmap[x+y] = (gray << 16) | (gray << 8) | gray | a;
                     }
                 }
                 return 0;
             }
          */
         this.GrayScaleMCode := this.MCode((A_PtrSize = 4) 
-        ? "2,x86:VVdWU4PsCIt0JCiLVCQki0QkIMHuAok0JIXSD4SDAAAAhcB0f408tQAAAAAx9ol8JASLfCQcjRyHMf+NdCYAkItEJByNDLiNtCYAAAAAZpCLEYPBBInQD7buwegQae1OAgAAD7bAacAsAQAAAegPtuqB4gAAAP9r7W4B6MHoConFCcLB4AjB5RAJ6gnQiUH8Odl1vIPGAQM8JANcJAQ5dCQkdZyDxAgxwFteX13D" 
-        : "2,x64:QVZVV1ZTRInOSYnLQYnSRYnGwe4CRYXAdHJFMclFMcCF0nRoDx9AAESJyg8fRAAAidCDwgFJjQyDizmJ+In7wegQD7bvD7bAae1OAgAAacAsAQAAAehAD7bvgecAAAD/a+1uAejB6AqJxQnHweAIweUQCe8Jx4k5RDnSdbNBg8ABQQHxQQHyRTnGdZwxwFteX11BXsM=")
+        ? "2,x86:VVdWU4PsCIt8JCiLdCQki0QkIMHvAg+v94k0JIX2dH+FwHR7jTS9AAAAAIl0JASLdCQcjRyGMfaNtCYAAAAAkItEJByNDLCNtCYAAAAAZpCLEYPBBInQD7buwegQae1OAgAAD7bAacAsAQAAAegPtuqB4gAAAP9r7W4B6MHoConFCcLB4AjB5RAJ6gnQiUH8Odl1vAH+A1wkBDs0JHKhg8QIMcBbXl9dww==" 
+        : "2,x64:V1ZTQcHpAkSJxkiJy0GJ00EPr/GF9nRnRTHAhdJ0YJBEicEPH0QAAInIg8EBTI0Ug0GLEonQD7b+wegQaf9OAgAAD7bAacAsAQAAAfgPtvqB4gAAAP9r/24B+MHoConHCcLB4AjB5xAJ+gnCQYkSRDnZdbRFAchFActBOfByoTHAW15fww==")
         /*
             unsigned int Invert_Colors(unsigned int bitmap[], unsigned int w, unsigned int h, unsigned int Stride)
             {
                 unsigned int a, r, g, b, gray, ARGB;
                 unsigned int x, y, offset = Stride/4;
-                for (y = 0; y < h; ++y) {
+                for (y = 0; y < h * offset; y += offset) {
                     for (x = 0; x < w; ++x) {
-                        ARGB = bitmap[x+(y*offset)];
+                        ARGB = bitmap[x+y];
                         a = ARGB & 0xFF000000;
                         r = (ARGB & 0x00FF0000) >> 16;
                         g = (ARGB & 0x0000FF00) >> 8;
                         b = (ARGB & 0x000000FF);
-                        bitmap[x+(y*offset)] = ((255-r) << 16) | ((255-g) << 8) | (255-b) | a;
+                        bitmap[x+y] = ((255-r) << 16) | ((255-g) << 8) | (255-b) | a;
                     }
                 }
                 return 0;
             }
         */
         this.InvertColorsMCode := this.MCode((A_PtrSize = 4)
-        ? "2,x86:VVdWU4PsCIt8JCiLVCQki0QkIMHvAok8JIXSdF+FwHRbwecCMe2JfCQEi3wkHI00hzH/jXQmAJCLRCQcjQyokIsRg8EEidCJ04Hi/wAA//fQ99OA8v8lAAD/AIHjAP8AAAnYCdCJQfw58XXUg8cBAywkA3QkBDl8JCR1vIPECDHAW15fXcM="
-        : "2,x64:VVdWU0SJz0iJy0GJ00SJxsHvAkWFwHRbRTHJRTHAhdJ0UWYPH0QAAESJyQ8fRAAAiciDwQFMjRSDQYsSidCJ1YHi/wAA//fQ99WA8v8lAAD/AIHlAP8AAAnoCdBBiQJBOct1zEGDwAFBAflBAftEOcZ1tTHAW15fXcM=")
+        ? "2,x86:VVdWU4PsCItsJCiLfCQki0QkIMHtAg+v/Yk8JIX/dGeFwHRjjTytAAAAAIl8JASLfCQcjTSHMf+NtCYAAAAAkItEJByNDLiNtCYAAAAAZpCLEYPBBInQidOB4v8AAP/30PfTgPL/JQAA/wCB4wD/AAAJ2AnQiUH8OfF11AHvA3QkBDs8JHK5g8QIMcBbXl9dww=="
+        : "2,x64:V1ZTQcHpAkSJx0iJzonTQQ+v+YX/dFNFMcCF0nRMZpBEicEPH0QAAInIg8EBTI0chkGLE4nQQYnSgeL/AAD/99BB99KA8v8lAAD/AEGB4gD/AABECdAJ0EGJAznLdclFAchEActBOfhytjHAW15fww==")
+        /*
+            unsigned int Convert_Monochrome(unsigned int bitmap[], unsigned int w, unsigned int h, unsigned int Stride, unsigned int threshold)
+            {
+                unsigned int a, r, g, b, ARGB;
+                unsigned int x, y, offset = Stride / 4;
+                for (y = 0; y < h * offset; y += offset) {
+                    for (x = 0; x < w; ++x) {
+                        ARGB = bitmap[x + y];
+                        a = ARGB & 0xFF000000;
+                        r = (ARGB & 0x00FF0000) >> 16;
+                        g = (ARGB & 0x0000FF00) >> 8;
+                        b = (ARGB & 0x000000FF);
+                        unsigned int luminance = (77 * r + 150 * g + 29 * b) >> 8;
+                        bitmap[x + y] = (luminance > threshold) ? 0xFFFFFFFF : 0xFF000000;
+                    }
+                }
+                return 0;
+            }
+        */
+        this.MonochromeMCode := this.MCode((A_PtrSize = 4)
+        ? "2,x86:VVdWU4PsDIt0JCyLTCQoi0QkJIt8JDDB7gIPr86JNCSJTCQEhcl0aYXAdGXB5gIx7Yl0JAiLdCQgjTSGjXQmAItEJCCNDKiNtCYAAAAAZpCLEYnTD7bGD7bSwesQacCWAAAAD7bba9Ida9tNAdgB0MHoCDn4dinHAf////+DwQQ58XXMAywkA3QkCDlsJAR3r4PEDDHAW15fXcONdCYAkMcBAAAA/4PBBDnxdaMDLCQDdCQIOWwkBHeG69U="
+        : "2,x64:VVdWU4t0JEhBwekCRInHSInLQYnTQQ+v+YX/dFyF0nRYRTHADx9AAESJwQ8fRAAAichMjRSDQYsSidUPtsYPttLB7RBpwJYAAABAD7bta9Ida+1NAegB0MHoCDnwdiGDwQFBxwL/////QTnLdcJFAchFActEOcd3rzHAW15fXcODwQFBxwIAAAD/RDnZdaFFAchFActEOcd3juvd")
     }
 
     /**
@@ -201,15 +224,15 @@ class OCR {
      * Images of other types should be first converted to this format (eg from file, from bitmap).
      * @param RandomAccessStreamOrSoftwareBitmap Pointer or an object containing a ptr to a RandomAccessStream or SoftwareBitmap
      * @param {String} lang OCR language. Default is first from available languages.
-     * @param {Integer|Object} transform Either a scale factor number, or an object {scale:Float, grayscale:Boolean, invertcolors:Boolean, rotate: 0 | 90 | 180 | 270, flip: 0 | "x" | "y"}
+     * @param {Integer|Object} transform Either a scale factor number, or an object {scale:Float, grayscale:Boolean, invertcolors:Boolean, monochrome:0-255, rotate: 0 | 90 | 180 | 270, flip: 0 | "x" | "y"}
      * @param {String} decoder Optional bitmap codec name to decode RandomAccessStream. Default is automatic detection.
      *  Possible values are gif, ico, jpeg, jpegxr, png, tiff, bmp.
      * @returns {OCR.Result} 
      */
     static Call(RandomAccessStreamOrSoftwareBitmap, Options:=0) {
-        local SoftwareBitmap := 0, RandomAccessStream := 0, lang:="FirstFromAvailableLanguages", width, height, x := 0, y := 0, w := 0, h := 0, scale, grayscale, invertcolors, OcrResult := this.Result(), Result, transform := 0, decoder := 0
+        local SoftwareBitmap := 0, RandomAccessStream := 0, lang:="FirstFromAvailableLanguages", width, height, x := 0, y := 0, w := 0, h := 0, scale, grayscale, invertcolors, monochrome, OcrResult := this.Result(), Result, transform := 0, decoder := 0
         this.__ExtractTransformParameters(Options, &transform)
-        scale := transform.scale, grayscale := transform.grayscale, invertcolors := transform.invertcolors, rotate := transform.rotate, flip := transform.flip
+        scale := transform.scale, grayscale := transform.grayscale, invertcolors := transform.invertcolors, monochrome := transform.monochrome, rotate := transform.rotate, flip := transform.flip
         this.__ExtractNamedParameters(Options, "x", &x, "y", &y, "w", &w, "h", &h, "language", &lang, "lang", &lang, "decoder", &decoder)
         this.LoadLanguage(lang)
         local customRegion := x || y || w || h
@@ -258,18 +281,21 @@ class OCR {
 
         SoftwareBitmapCommon:
 
-        if (grayscale || invertcolors || this.DisplayImage) {
+        if (grayscale || invertcolors || monochrome || this.DisplayImage) {
             ComCall(15, SoftwareBitmap, "int", 2, "ptr*", BitmapBuffer := ComValue(13,0)) ; LockBuffer
             MemoryBuffer := ComObjQuery(BitmapBuffer, "{fbc4dd2a-245b-11e4-af98-689423260cf8}")
             ComCall(6, MemoryBuffer, "ptr*", MemoryBufferReference := ComValue(13,0)) ; CreateReference
             BufferByteAccess := ComObjQuery(MemoryBufferReference, "{5b0d3235-4dba-4d44-865e-8f1d0e4fd04d}")
             ComCall(3, BufferByteAccess, "ptr*", &SoftwareBitmapByteBuffer:=0, "uint*", &BufferSize:=0) ; GetBuffer
-
-            if invertcolors
-                DllCall(this.InvertColorsMCode, "ptr", SoftwareBitmapByteBuffer, "uint", width, "uint", height, "uint", (width*4+3) // 4 * 4, "cdecl uint")
-            
+           
             if grayscale
                 DllCall(this.GrayScaleMCode, "ptr", SoftwareBitmapByteBuffer, "uint", width, "uint", height, "uint", (width*4+3) // 4 * 4, "cdecl uint")
+
+            if monochrome
+                DllCall(this.MonochromeMCode, "ptr", SoftwareBitmapByteBuffer, "uint", width, "uint", height, "uint", (width*4+3) // 4 * 4, "uint", monochrome, "cdecl uint")
+            
+            if invertcolors
+                DllCall(this.InvertColorsMCode, "ptr", SoftwareBitmapByteBuffer, "uint", width, "uint", height, "uint", (width*4+3) // 4 * 4, "cdecl uint")
     
             if this.DisplayImage {
                 local hdc := DllCall("GetDC", "ptr", 0, "ptr"), bi := Buffer(40, 0), hbm
@@ -767,7 +793,7 @@ class OCR {
      * the top left corner of the image.
      * @param FileName Either full or relative (to A_WorkingDir) path to the file.
      * @param lang OCR language. Default is first from available languages.
-     * @param transform Either a scale factor number, or an object {scale:Float, grayscale:Boolean, invertcolors:Boolean, rotate: 0 | 90 | 180 | 270, flip: 0 | "x" | "y"}
+     * @param transform Either a scale factor number, or an object {scale:Float, grayscale:Boolean, invertcolors:Boolean, monochrome:0-255, rotate: 0 | 90 | 180 | 270, flip: 0 | "x" | "y"}
      * @returns {OCR.Result} 
      */
     static FromFile(FileName, Options:=0) {
@@ -971,7 +997,7 @@ class OCR {
             if mode&1
                 WinSetExStyle(oldStyle, hwnd)
             SoftwareBitmap := this.HBitmapToSoftwareBitmap(hBitMap,, transform)
-            this.__DeleteProps(Options, "invertcolors", "grayscale")
+            this.__DeleteProps(Options, "invertcolors", "grayscale", "monochrome")
             result := this(SoftwareBitmap, Options)
         }
 
@@ -1551,6 +1577,8 @@ class OCR {
         if IsSet(transform) {
             if (transform.HasProp("grayscale") && transform.grayscale)
                 DllCall(this.GrayScaleMCode, "ptr", SoftwareBitmapByteBuffer, "uint", w, "uint", h, "uint", (w*4+3) // 4 * 4, "cdecl uint")
+            if (transform.HasProp("monochrome") && transform.monochrome)
+                DllCall(this.MonochromeMCode, "ptr", SoftwareBitmapByteBuffer, "uint", w, "uint", h, "uint", (w*4+3) // 4 * 4, "uint", transform.monochrome, "cdecl uint")
             if (transform.HasProp("invertcolors") && transform.invertcolors)
                 DllCall(this.InvertColorsMCode, "ptr", SoftwareBitmapByteBuffer, "uint", w, "uint", h, "uint", (w*4+3) // 4 * 4, "cdecl uint")
         }
@@ -1681,16 +1709,16 @@ class OCR {
     }
 
     static __ExtractTransformParameters(obj, &transform) {
-        local scale := 1, grayscale := 0, invertcolors := 0, rotate := 0, flip := 0
+        local scale := 1, grayscale := 0, invertcolors := 0, monochrome := 0, rotate := 0, flip := 0
         if IsObject(obj)
-            this.__ExtractNamedParameters(obj, "scale", &scale, "grayscale", &grayscale, "invertcolors", &invertcolors, "rotate", &rotate, "flip", &flip, "transform", &transform)
+            this.__ExtractNamedParameters(obj, "scale", &scale, "grayscale", &grayscale, "invertcolors", &invertcolors, "monochrome", &monochrome, "rotate", &rotate, "flip", &flip, "transform", &transform)
 
         if IsSet(transform) && IsObject(transform) {
-            for prop in ["scale", "grayscale", "invertcolors", "rotate", "flip"]
+            for prop in ["scale", "grayscale", "invertcolors", "monochrome", "rotate", "flip"]
                 if !transform.HasProp(prop)
                     transform.%prop% := %prop%
         } else
-            transform := {scale:scale, grayscale:grayscale, invertcolors:invertcolors, rotate:rotate, flip:flip}
+            transform := {scale:scale, grayscale:grayscale, invertcolors:invertcolors, monochrome:monochrome, rotate:rotate, flip:flip}
     
         transform.flip := transform.flip = "y" ? 1 : transform.flip = "x" ? 2 : transform.flip
     }
