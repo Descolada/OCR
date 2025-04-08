@@ -302,6 +302,7 @@ class OCR {
                 NumPut("uint", 40, "int", width, "int", -height, "ushort", 1, "ushort", 32, bi)
                 hbm := DllCall("CreateDIBSection", "ptr", hdc, "ptr", bi, "uint", 0, "ptr*", &ppvBits:=0, "ptr", 0, "uint", 0, "ptr")
                 DllCall("ntdll\memcpy", "ptr", ppvBits, "ptr", SoftwareBitmapByteBuffer, "uint", BufferSize, "cdecl")
+                DllCall("ReleaseDC", "Ptr", 0, "Ptr", hdc, "Int")
                 this.DisplayHBitmap(hbm)
             }
             
