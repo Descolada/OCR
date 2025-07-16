@@ -20,7 +20,7 @@
  * 
  * Options can be an object containing none or all of these elements:
  * {
- *      lang: OCR language. Default is first from available languages.
+ *      lang: OCR language. Default is first from available languages. This can also be a function which evaluates to a language string.
  *      scale: a Float scale factor to zoom the image in or out, which might improve detection. 
  *             The resulting coordinates will be adjusted to scale. Default is 1.
  *      grayscale: Boolean 0 | 1 whether to convert the image to black-and-white. Default is 0.
@@ -1134,6 +1134,8 @@ class OCR {
         local hString, Language:=ComValue(13, 0), OcrEngine:=ComValue(13, 0)
         if this.HasOwnProp("CurrentLanguage") && this.HasOwnProp("OcrEngine") && this.CurrentLanguage = lang
             return
+        if HasMethod(lang)
+            lang := lang()
         if (lang = "FirstFromAvailableLanguages")
             ComCall(10, this.OcrEngineStatics, "ptr*", OcrEngine)   ; TryCreateFromUserProfileLanguages
         else {
@@ -1154,7 +1156,7 @@ class OCR {
      */
     static WordsBoundingRect(words*) {
         if !words.Length
-            throw ValueError("This function requires at least one argument")
+            throw ValueError("This function requires at least one argument", -1)
         local X1 := 100000000, Y1 := 100000000, X2 := -100000000, Y2 := -100000000, word
         for word in words {
             X1 := Min(word.x, X1), Y1 := Min(word.y, Y1), X2 := Max(word.x+word.w, X2), Y2 := Max(word.y+word.h, Y2)
@@ -1567,9 +1569,9 @@ class OCR {
         W := NumGet(bi, 4, "int"), H := NumGet(bi, 8, "int")
 
         ComCall(7, this.SoftwareBitmapFactory, "int", 87, "int", W, "int", H, "int", 0, "ptr*", SoftwareBitmap := ComValue(13,0)) ; CreateWithAlpha: Bgra8 & Premultiplied
-        ComCall(15, SoftwareBitmap, "int", 2, "ptr*", BitmapBuffer := ComValue(13,0)) ; LockBuffer
+        ComCall(15, SoftwareBitmap, "int", 2, "ptr*", &BitmapBuffer := 0) ; LockBuffer
         MemoryBuffer := ComObjQuery(BitmapBuffer, "{fbc4dd2a-245b-11e4-af98-689423260cf8}")
-        ComCall(6, MemoryBuffer, "ptr*", MemoryBufferReference := ComValue(13,0)) ; CreateReference
+        ComCall(6, MemoryBuffer, "ptr*", &MemoryBufferReference := 0) ; CreateReference
         BufferByteAccess := ComObjQuery(MemoryBufferReference, "{5b0d3235-4dba-4d44-865e-8f1d0e4fd04d}")
         ComCall(3, BufferByteAccess, "ptr*", &SoftwareBitmapByteBuffer:=0, "uint*", &BufferSize:=0) ; GetBuffer
 
@@ -1586,7 +1588,7 @@ class OCR {
         
         if IsSet(dhDC)
             DllCall("DeleteDC", "ptr", dhDC)
-        BufferByteAccess := "", MemoryBufferReference := "", MemoryBuffer := "", BitmapBuffer := "" ; Release in correct order
+        BufferByteAccess := "", ObjRelease(MemoryBufferReference), MemoryBuffer := "", ObjRelease(BitmapBuffer) ; Release in correct order
 
         return SoftwareBitmap
     }
