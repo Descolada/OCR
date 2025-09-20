@@ -1395,7 +1395,7 @@ class OCR {
         if flip
             ComCall(13, BitmapTransform, "uint", flip) ; put_Flip
 
-        if IsSet(X) && (X != 0 || Y != 0)  {
+        if (IsSet(X) && X != 0) || (IsSet(Y) && Y != 0) || IsSet(W) || IsSet(H)  {
             bounds := Buffer(16,0), NumPut("int", Floor(X*scale), "int", Floor(Y*scale), "int", Floor(sbW*scale), "int", Floor(sbH*scale), bounds)
             ComCall(17, BitmapTransform, "ptr", bounds) ; put_Bounds
         }
