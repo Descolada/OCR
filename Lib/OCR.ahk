@@ -6,7 +6,8 @@
  * 
  * Ways of initiating OCR:
  * OCR(RandomAccessStreamOrSoftwareBitmap, Options?)
- * OCR.FromDesktop(Options?, Monitor?)
+ * OCR.FromDesktop(Options?)
+ * OCR.FromMonitor(Monitor?, Options?)
  * OCR.FromRect(X, Y, W, H, Options?)
  * OCR.FromWindow(WinTitle:="", Options?, WinText:="", ExcludeTitle:="", ExcludeText:="")
  *      Note: the result object coordinates will be in CoordMode "Pixel"
@@ -33,7 +34,7 @@
  * }
  * 
  * Note: Options also accepts any optional parameters after it like named parameters.
- * Eg. OCR.FromDesktop({lang:"en-us", monitor:2})
+ * Eg. OCR.FromMonitor({lang:"en-us", monitor:2})
  * 
  * Additional methods:
  * OCR.GetAvailableLanguages()
@@ -1013,20 +1014,29 @@ class OCR {
     }
 
     /**
-     * Returns an OCR results object for the whole desktop. Locations of the words will be relative to
+     * Returns an OCR results object for the specified monitor. Locations of the words will be relative to
      * the primary screen (CoordMode "Screen"), even if a secondary monitor is being captured.
      * @param Options Optional: OCR options {lang, scale, grayscale, invertcolors, rotate, flip, x, y, w, h, decoder}. 
      * @param Monitor Optional: The monitor from which to get the desktop area. Default is primary monitor.
      *   If screen scaling between monitors differs, then use DllCall("SetThreadDpiAwarenessContext", "ptr", -3)
      * @returns {OCR.Result} 
      */
-    static FromDesktop(Monitor?, Options:=0) {
+    static FromMonitor(Monitor?, Options:=0) {
         if !Options && IsSet(Monitor) && IsObject(Monitor)
             Options := Monitor, Monitor := unset
         this.__ExtractNamedParameters(Options, "Monitor", &Monitor)
         MonitorGet(monitor?, &Left, &Top, &Right, &Bottom)
         return this.FromRect(Left, Top, Right-Left, Bottom-Top, Options)
     }
+
+    /**
+     * Returns an OCR results object for the whole desktop. Locations of the words will be relative to
+     * the primary screen (CoordMode "Screen").
+     * @param Options Optional: OCR options {lang, scale, grayscale, invertcolors, rotate, flip, x, y, w, h, decoder}. 
+     *   If screen scaling between monitors differs, then use DllCall("SetThreadDpiAwarenessContext", "ptr", -3)
+     * @returns {OCR.Result}
+     */
+    static FromDesktop(Options:=0) => this.FromRect(SysGet(76), SysGet(77), SysGet(78), SysGet(79), Options)
 
     /**
      * Returns an OCR results object for a region of the screen. Locations of the words will be relative
