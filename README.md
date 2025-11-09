@@ -1,10 +1,11 @@
 # NOTICE
-January 2025 version 2 (alpha stage) of this library was published, which introduces multiple breaking changes. Major differences include:
+November 2025 version 2 of this library was officially released, which introduces multiple breaking changes. Major differences include:
 1. Options common to the different OCR functions (such as `scale`, `lang` etc) are now gathered under the `Options` argument
 2. OCR.Result objects now contain common methods to all result types (Result, Line, Word, etc) such as `Result.Highlight` and `Result.Click`
 3. OCR.FromWindow uses CoordMode from A_CoordModePixel and the option `onlyClientArea` is no longer valid. (applied in 18.02.2025 update)
+4. Compared to v2 alpha version, the v2 final release includes an additional `OCR.FromMonitor` method, and `OCR.FromDesktop` was modified to capture the whole virtual screen. 
 
-Since v2 is still in alpha stage, breaking changes are still allowed. If you have any suggestions about the syntax or feature requests, please open an Issue here in GitHub.
+If you have any suggestions about the syntax or feature requests, please open an Issue here in GitHub.
 
 # OCR
 UWP OCR for AHK v2:
@@ -22,7 +23,8 @@ Based on the UWP OCR function for AHK v1 by malcev.
 
 Ways of initiating OCR:
 OCR(RandomAccessStreamOrSoftwareBitmap, Options?)
-OCR.FromDesktop(Options?, Monitor?)
+OCR.FromDesktop(Options?)
+OCR.FromMonitor(Monitor?, Options?)
 OCR.FromRect(X, Y, W, H, Options?)
 OCR.FromWindow(WinTitle:="", Options?, WinText:="", ExcludeTitle:="", ExcludeText:="")
      Note: the result object coordinates will be in CoordMode "Pixel"
