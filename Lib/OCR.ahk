@@ -110,7 +110,7 @@
  * Powershell (run as admin) with the following command: Get-WindowsCapability -Online | Where-Object { $_.Name -Like 'Language.OCR*' } 
  */
 class OCR {
-    static Version => "2.1.0"
+    static Version => "2.0.0"
     static IID_IRandomAccessStream := "{905A0FE1-BC53-11DF-8C49-001E4FC686DA}"
          , IID_IPicture            := "{7BF80980-BF32-101A-8BBB-00AA00300CAB}"
          , IID_IAsyncInfo          := "{00000036-0000-0000-C000-000000000046}"
