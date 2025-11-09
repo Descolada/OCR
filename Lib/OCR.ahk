@@ -110,7 +110,7 @@
  * Powershell (run as admin) with the following command: Get-WindowsCapability -Online | Where-Object { $_.Name -Like 'Language.OCR*' } 
  */
 class OCR {
-    static Version => "2.0-alpha.5"
+    static Version => "2.1.0"
     static IID_IRandomAccessStream := "{905A0FE1-BC53-11DF-8C49-001E4FC686DA}"
          , IID_IPicture            := "{7BF80980-BF32-101A-8BBB-00AA00300CAB}"
          , IID_IAsyncInfo          := "{00000036-0000-0000-C000-000000000046}"
@@ -1016,9 +1016,9 @@ class OCR {
     /**
      * Returns an OCR results object for the specified monitor. Locations of the words will be relative to
      * the primary screen (CoordMode "Screen"), even if a secondary monitor is being captured.
-     * @param Options Optional: OCR options {lang, scale, grayscale, invertcolors, rotate, flip, x, y, w, h, decoder}. 
      * @param Monitor Optional: The monitor from which to get the desktop area. Default is primary monitor.
      *   If screen scaling between monitors differs, then use DllCall("SetThreadDpiAwarenessContext", "ptr", -3)
+     * @param Options Optional: OCR options {lang, scale, grayscale, invertcolors, rotate, flip, x, y, w, h, decoder}. 
      * @returns {OCR.Result} 
      */
     static FromMonitor(Monitor?, Options:=0) {
@@ -1030,7 +1030,7 @@ class OCR {
     }
 
     /**
-     * Returns an OCR results object for the whole desktop. Locations of the words will be relative to
+     * Returns an OCR results object for the whole virtual screen. Locations of the words will be relative to
      * the primary screen (CoordMode "Screen").
      * @param Options Optional: OCR options {lang, scale, grayscale, invertcolors, rotate, flip, x, y, w, h, decoder}. 
      *   If screen scaling between monitors differs, then use DllCall("SetThreadDpiAwarenessContext", "ptr", -3)
