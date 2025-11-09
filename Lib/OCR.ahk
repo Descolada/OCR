@@ -1302,46 +1302,62 @@ class OCR {
      * @returns {Array}
      */
     static SortArray(arr, optionsOrCallback:="N", key?) {
-        static sizeofFieldType := 16 ; Same on both 32-bit and 64-bit
+        if (arr.Length < 2)
+            return this
         if HasMethod(optionsOrCallback)
-            pCallback := CallbackCreate(CustomCompare.Bind(optionsOrCallback), "F Cdecl", 2), optionsOrCallback := ""
+            compareFunc := optionsOrCallback, optionsOrCallback := ""
         else {
             if InStr(optionsOrCallback, "N")
-                pCallback := CallbackCreate(IsSet(key) ? NumericCompareKey.Bind(key) : NumericCompare, "F CDecl", 2)
+                compareFunc := IsSet(key) ? NumericCompareKey.Bind(key) : NumericCompare
             if RegExMatch(optionsOrCallback, "i)C(?!0)|C1|COn")
-                pCallback := CallbackCreate(IsSet(key) ? StringCompareKey.Bind(key,,True) : StringCompare.Bind(,,True), "F CDecl", 2)
+                compareFunc := IsSet(key) ? StringCompareKey.Bind(key,,True) : StringCompare.Bind(,,True)
             if RegExMatch(optionsOrCallback, "i)C0|COff")
-                pCallback := CallbackCreate(IsSet(key) ? StringCompareKey.Bind(key) : StringCompare, "F CDecl", 2)
-            if InStr(optionsOrCallback, "Random")
-                pCallback := CallbackCreate(RandomCompare, "F CDecl", 2)
-            if !IsSet(pCallback)
+                compareFunc := IsSet(key) ? StringCompareKey.Bind(key) : StringCompare
+            if InStr(optionsOrCallback, "Random") {
+                len := arr.Length
+                Loop len-1 {
+                    i := len + 1 - A_Index
+                    j := Random(1, i)
+                    if (j != i)
+                        tmp := arr[i], arr[i] := arr[j], arr[j] := tmp
+                }
+                return arr
+            }
+            if !IsSet(compareFunc)
                 throw ValueError("No valid options provided!", -1)
         }
-        mFields := NumGet(ObjPtr(arr) + (8 + (VerCompare(A_AhkVersion, "<2.1-") > 0 ? 3 : 5)*A_PtrSize), "Ptr") ; in v2.0: 0 is VTable. 2 is mBase, 3 is mFields, 4 is FlatVector, 5 is mLength and 6 is mCapacity
-        DllCall("msvcrt.dll\qsort", "Ptr", mFields, "UInt", arr.Length, "UInt", sizeofFieldType, "Ptr", pCallback, "Cdecl")
-        CallbackFree(pCallback)
+        QuickSort(1, arr.Length)
         if RegExMatch(optionsOrCallback, "i)R(?!a)")
             this.ReverseArray(arr)
         if InStr(optionsOrCallback, "U")
-            arr := this.Unique(arr)
+            arr := this.UniqueArray(arr)
         return arr
 
-        CustomCompare(compareFunc, pFieldType1, pFieldType2) => (ValueFromFieldType(pFieldType1, &fieldValue1), ValueFromFieldType(pFieldType2, &fieldValue2), compareFunc(fieldValue1, fieldValue2))
-        NumericCompare(pFieldType1, pFieldType2) => (ValueFromFieldType(pFieldType1, &fieldValue1), ValueFromFieldType(pFieldType2, &fieldValue2), fieldValue1 - fieldValue2)
-        NumericCompareKey(key, pFieldType1, pFieldType2) => (ValueFromFieldType(pFieldType1, &fieldValue1), ValueFromFieldType(pFieldType2, &fieldValue2), fieldValue1.%key% - fieldValue2.%key%)
-        StringCompare(pFieldType1, pFieldType2, casesense := False) => (ValueFromFieldType(pFieldType1, &fieldValue1), ValueFromFieldType(pFieldType2, &fieldValue2), StrCompare(fieldValue1 "", fieldValue2 "", casesense))
-        StringCompareKey(key, pFieldType1, pFieldType2, casesense := False) => (ValueFromFieldType(pFieldType1, &fieldValue1), ValueFromFieldType(pFieldType2, &fieldValue2), StrCompare(fieldValue1.%key% "", fieldValue2.%key% "", casesense))
-        RandomCompare(pFieldType1, pFieldType2) => (Random(0, 1) ? 1 : -1)
+        NumericCompare(left, right) => (left > right) - (left < right)
+        NumericCompareKey(key, left, right) => ((f1 := left.HasProp("__Item") ? left[key] : left.%key%), (f2 := right.HasProp("__Item") ? right[key] : right.%key%), (f1 > f2) - (f1 < f2))
+        StringCompare(left, right, casesense := False) => StrCompare(left "", right "", casesense)
+        StringCompareKey(key, left, right, casesense := False) => StrCompare((left.HasProp("__Item") ? left[key] : left.%key%) "", (right.HasProp("__Item") ? right[key] : right.%key%) "", casesense)
 
-        ValueFromFieldType(pFieldType, &fieldValue?) {
-            static SYM_STRING := 0, PURE_INTEGER := 1, PURE_FLOAT := 2, SYM_MISSING := 3, SYM_OBJECT := 5
-            switch SymbolType := NumGet(pFieldType + 8, "Int") {
-                case PURE_INTEGER: fieldValue := NumGet(pFieldType, "Int64") 
-                case PURE_FLOAT: fieldValue := NumGet(pFieldType, "Double") 
-                case SYM_STRING: fieldValue := StrGet(NumGet(pFieldType, "Ptr")+2*A_PtrSize)
-                case SYM_OBJECT: fieldValue := ObjFromPtrAddRef(NumGet(pFieldType, "Ptr")) 
-                case SYM_MISSING: return		
+        ; In-place quicksort (Hoare-style partition with middle pivot)
+        QuickSort(left, right) {
+            i := left
+            j := right
+            pivot := arr[(left + right) // 2]
+
+            while (i <= j) {
+                while (compareFunc(arr[i], pivot) < 0)
+                    i++
+                while (compareFunc(arr[j], pivot) > 0)
+                    j--
+                if (i <= j) {
+                    temp := arr[i], arr[i] := arr[j], arr[j] := temp
+                    i++, j--
+                }
             }
+            if (left < j)
+                QuickSort(left, j)
+            if (i < right)
+                QuickSort(i, right)
         }
     }
     ; Reverses the array in-place
