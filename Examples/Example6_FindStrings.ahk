@@ -7,7 +7,7 @@ Loop {
     Sleep 500 ; Small delay to wait for the InputBox to close
     if ib.Result != "OK"
         ExitApp
-    result := OCR.FromDesktop(,2)
+    result := OCR.FromDesktop({scale:2})
     found := result.FindStrings(ib.Value, {SearchFunc: RegExMatch})
     if !found.Length {
         MsgBox 'Phrase "' ib.Value '" not found!'
