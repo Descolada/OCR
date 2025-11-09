@@ -283,9 +283,9 @@ class OCR {
         SoftwareBitmapCommon:
 
         if (grayscale || invertcolors || monochrome || this.DisplayImage) {
-            ComCall(15, SoftwareBitmap, "int", 2, "ptr*", BitmapBuffer := ComValue(13,0)) ; LockBuffer
+            ComCall(15, SoftwareBitmap, "int", 2, "ptr*", &BitmapBuffer := 0) ; LockBuffer
             MemoryBuffer := ComObjQuery(BitmapBuffer, "{fbc4dd2a-245b-11e4-af98-689423260cf8}")
-            ComCall(6, MemoryBuffer, "ptr*", MemoryBufferReference := ComValue(13,0)) ; CreateReference
+            ComCall(6, MemoryBuffer, "ptr*", &MemoryBufferReference := 0) ; CreateReference
             BufferByteAccess := ComObjQuery(MemoryBufferReference, "{5b0d3235-4dba-4d44-865e-8f1d0e4fd04d}")
             ComCall(3, BufferByteAccess, "ptr*", &SoftwareBitmapByteBuffer:=0, "uint*", &BufferSize:=0) ; GetBuffer
            
@@ -307,7 +307,7 @@ class OCR {
                 this.DisplayHBitmap(hbm)
             }
             
-            BufferByteAccess := "", MemoryBufferReference := "", MemoryBuffer := "", BitmapBuffer := "" ; Release in correct order
+            BufferByteAccess := "", ObjRelease(MemoryBufferReference), MemoryBuffer := "", ObjRelease(BitmapBuffer) ; Release in correct order
         }
 
         ComCall(6, this.OcrEngine, "ptr", SoftwareBitmap, "ptr*", Result:=ComValue(13,0))   ; RecognizeAsync
@@ -1589,6 +1589,10 @@ class OCR {
         
         if IsSet(dhDC)
             DllCall("DeleteDC", "ptr", dhDC)
+        if BufferByteAccess.HasMethod("Dispose")
+            BufferByteAccess.Dispose()
+        if MemoryBuffer.HasMethod("Dispose")
+            MemoryBuffer.Dispose()
         BufferByteAccess := "", ObjRelease(MemoryBufferReference), MemoryBuffer := "", ObjRelease(BitmapBuffer) ; Release in correct order
 
         return SoftwareBitmap
